@@ -19,6 +19,11 @@ export interface Config {
   rateLimitMutationsPerMin: number;
   rateLimitDisable: boolean;
   rateLimitTrustXff: boolean;
+  /** `zara_app_dev` DSN — dev rule CRUD (Z4). Unset → rule routes 503. */
+  rulesDatabaseUrl?: string;
+  /** `zara_promote` DSN — cross-schema SELECT+INSERT promotion path.
+   *  Unset → rule reads + promote routes 503. */
+  promoteDatabaseUrl?: string;
   /** KMS seam (ADR-0003) — undefined when KMS_URL is unset; secrets
    *  routes then answer 503. Never an insecure local fallback. */
   kms?: {
@@ -73,6 +78,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     rateLimitMutationsPerMin: num(env, 'RATE_LIMIT_MUTATIONS_PER_MIN', 30),
     rateLimitDisable: 'RATE_LIMIT_DISABLE' in env,
     rateLimitTrustXff: 'RATE_LIMIT_TRUST_XFF' in env,
+    ...(env.RULES_DATABASE_URL ? { rulesDatabaseUrl: env.RULES_DATABASE_URL } : {}),
+    ...(env.PROMOTE_DATABASE_URL ? { promoteDatabaseUrl: env.PROMOTE_DATABASE_URL } : {}),
     ...(env.KMS_URL
       ? {
           kms: {

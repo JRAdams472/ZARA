@@ -26,6 +26,11 @@ export const AUDIT_ACTIONS = {
   authDenied: 'auth.denied',
   secretPut: 'secret.put',
   secretRewrap: 'secret.rewrap',
+  ruleCreate: 'rule.create',
+  ruleUpdate: 'rule.update',
+  ruleDelete: 'rule.delete',
+  rulePublish: 'rule.publish',
+  promoteRule: 'promote.rule',
 } as const;
 
 function canonicalize(v: unknown): string {
@@ -55,15 +60,22 @@ export function canonicalEvent(e: {
   });
 }
 
-/** Append one attributed row inside the caller's tenant tx. */
+/** Append one attributed row inside the caller's tenant tx.
+ *  `schema` selects the audit table — control chain (`zara_control`)
+ *  or an env-schema chain (`zara_dev`/…) for data-plane mutations
+ *  attested inside the SAME transaction that made them. */
 export async function record(
   tx: TxSql,
   actor: { sub: string; email?: string },
   event: AuditEvent,
+  schema = 'zara_control',
 ): Promise<void> {
   await tx`SELECT pg_advisory_xact_lock(${CHAIN_LOCK})`;
+  // schema is code-controlled ('zara_control' | `zara_${env}`) — safe
+  // to inline as a qualified name.
+  const table = tx.unsafe(`${schema}.audit_events`);
   const tail = await tx<{ hash: string }[]>`
-    SELECT hash FROM zara_control.audit_events ORDER BY id DESC LIMIT 1`;
+    SELECT hash FROM ${table} ORDER BY id DESC LIMIT 1`;
   const prevHash = tail[0]?.hash ?? '';
   const occurred = await tx<{ t: string }[]>`
     SELECT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS t`;
@@ -78,7 +90,7 @@ export async function record(
   // tenant_id comes from the same GUC RLS enforces — set by withTenantTx,
   // so the row can never be attributed to a different tenant than the tx.
   await tx`
-    INSERT INTO zara_control.audit_events
+    INSERT INTO ${table}
       (tenant_id, occurred_at, actor_sub, action, detail, prev_hash, hash)
     VALUES (
       current_setting('zara.tenant_id')::uuid,

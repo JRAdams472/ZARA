@@ -27,6 +27,17 @@ const cipher = createCipher(cfg);
 if (!cipher) {
   console.warn('KMS_URL unset — secrets routes will answer 503 (no local fallback, ADR-0003)');
 }
+const rulesSql = cfg.rulesDatabaseUrl ? createPool(cfg.rulesDatabaseUrl) : undefined;
+const promoteSql = cfg.promoteDatabaseUrl ? createPool(cfg.promoteDatabaseUrl) : undefined;
+if (!rulesSql || !promoteSql) {
+  console.warn('RULES_/PROMOTE_DATABASE_URL unset — rule + promotion routes will answer 503');
+}
 
-const app = await buildApp(cfg, { sql, validator, ...(cipher ? { cipher } : {}) });
+const app = await buildApp(cfg, {
+  sql,
+  validator,
+  ...(cipher ? { cipher } : {}),
+  ...(rulesSql ? { rulesSql } : {}),
+  ...(promoteSql ? { promoteSql } : {}),
+});
 await app.listen({ port: cfg.port, host: '::' });

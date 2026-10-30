@@ -13,6 +13,8 @@ import { registerEnvContext } from './routes/envContext.js';
 import { registerGrants } from './routes/grants.js';
 import { registerAudit } from './routes/audit.js';
 import { registerSecrets } from './routes/secrets.js';
+import { registerRules } from './routes/rules.js';
+import { registerPromote } from './routes/promote.js';
 import { LOG_FORMATTERS, LOG_REDACT } from './log/redact.js';
 
 export interface AppDeps {
@@ -20,6 +22,10 @@ export interface AppDeps {
   validator: JwtValidator;
   /** Undefined when KMS_URL is unset — secrets routes then 503. */
   cipher?: FieldCipher;
+  /** `zara_app_dev` pool — unset → rule mutations 503. */
+  rulesSql?: postgres.Sql;
+  /** `zara_promote` pool — unset → rule reads/promotes 503. */
+  promoteSql?: postgres.Sql;
 }
 
 export async function buildApp(cfg: Config, deps: AppDeps): Promise<FastifyInstance> {
@@ -62,5 +68,7 @@ export async function buildApp(cfg: Config, deps: AppDeps): Promise<FastifyInsta
   registerGrants(app, deps.sql);
   registerAudit(app, deps.sql);
   registerSecrets(app, deps.sql, deps.cipher);
+  registerRules(app, deps.rulesSql, deps.promoteSql, deps.sql);
+  registerPromote(app, deps.promoteSql, deps.sql);
   return app;
 }

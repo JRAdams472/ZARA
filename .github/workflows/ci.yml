@@ -196,6 +196,8 @@ jobs:
       ZARA_ENGINE_PASSWORD: eng-${{ github.run_id }}-${{ github.run_attempt }}
       ZARA_MGMT_PASSWORD: mgmt-${{ github.run_id }}-${{ github.run_attempt }}
       MGMT_DATABASE_URL: postgres://zara_mgmt:mgmt-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      RULES_DATABASE_URL: postgres://zara_app_dev:dev-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      PROMOTE_DATABASE_URL: postgres://zara_promote:pro-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
       KMS_URL: http://localhost:8200
       KMS_TOKEN_FILE: ${{ github.workspace }}/data/openbao/api-token
       BAO_ROOT: ci-root-${{ github.run_id }}-${{ github.run_attempt }}

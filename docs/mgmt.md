@@ -87,9 +87,40 @@ audit writes for unauthenticated traffic.
 | `GET /api/admin/secrets` | RM/Eng | metadata list — RM sees `keyVersion`+`updatedBy`; Engineer minus `updatedBy`; Auditor **403** |
 | `PUT /api/admin/secrets/:name` | RM | encrypt → upsert ciphertext — audited `secret.put` |
 | `POST /api/admin/secrets/:name/rewrap` | RM | transit rewrap under latest key version — audited `secret.rewrap` |
+| `GET /api/envs/{env}/rules` | env-scoped | artifact list in that env (drafts live in dev) |
+| `GET /api/envs/{env}/rules/:key` | env-scoped | one artifact incl. `spec`/`jdm` |
+| `POST /api/envs/dev/rules` | dev write | create draft — spec = JDM doc, PII-guarded, sha256 over `jdm::text` |
+| `PUT /api/envs/dev/rules/:key` | dev write | update the draft (published rows are immutable) |
+| `DELETE /api/envs/dev/rules/:key` | dev write | delete the draft |
+| `POST /api/envs/dev/rules/:key/publish` | dev write | draft → immutable published row |
+| `POST /api/envs/{env}/rules/:key/promote` | engineer→UAT, RM→PROD | copy published row into the successor env + history — **unskippable**: target is derived, `DEV→PROD` inexpressible |
+| `GET /api/envs/{env}/promotions` | env-scoped | `promotion_history` tail (`?limit=`, ≤200) |
 
 Grant writes and their audit rows commit in the **same** tenant-scoped
 transaction — a mutation can never commit without its attestation.
+
+## Rule lifecycle + promotion (Z4 Phase 1)
+
+Two additional DSNs, both optional → 503 when unset:
+
+- `RULES_DATABASE_URL` — `zara_app_dev`, dev-schema DML for draft CRUD
+  and publish. Mutations are **DEV-only** (`POST/PUT/DELETE`/`publish`
+  outside dev → 400) and additionally require `accessIn(roles,'dev')`
+  → `write`. `spec` is the JDM document itself (validate +
+  canonicalize); `sha256` is computed **in Postgres** over `jdm::text`,
+  matching the seed convention. Every write attests an `audit_events`
+  row in `zara_dev` inside the same transaction.
+- `PROMOTE_DATABASE_URL` — `zara_promote`, the sanctioned cross-schema
+  SELECT+INSERT role. Rule reads in any env run through it; promotion
+  copies the source's latest published row **verbatim** (`spec`/`jdm`/
+  `sha256` preserved → provably identical graph) into the derived
+  successor env + `promotion_history` + `audit_events`, atomically.
+  `canPromote`: engineer may promote through UAT, Release Manager is the
+  PROD sign-off.
+
+The write-path PII guard (`rules/pii.ts`) rejects denylist keys and
+SSN/email-shaped values at authoring — the engine boundary's invariant
+applied upstream.
 
 ## KMS seam + secrets (ADR-0003)
 
