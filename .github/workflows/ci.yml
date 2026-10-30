@@ -91,6 +91,8 @@ jobs:
       ZARA_APP_UAT_PASSWORD: uat-${{ github.run_id }}-${{ github.run_attempt }}
       ZARA_APP_PROD_PASSWORD: prod-${{ github.run_id }}-${{ github.run_attempt }}
       ZARA_PROMOTE_PASSWORD: pro-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_ENGINE_PASSWORD: eng-${{ github.run_id }}-${{ github.run_attempt }}
+      ENGINE_DATABASE_URL: postgres://zara_engine:eng-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -105,6 +107,10 @@ jobs:
         run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
       - name: Isolation suite
         run: bash tests/isolation/run.sh
+      - name: Engine loader test (zara_engine role + RLS)
+        run: cargo test -p zara-engine --test loader
+      - name: Eval latency bench (p95 < 15 ms)
+        run: cargo run -p zara-engine --bin zara_bench -- --iterations 200
 
   # Z2 adds: rust job (fmt / clippy --all-targets -D warnings / test,
   #   postgres service, sqlx migrations) — MPEx ci.yml pattern.

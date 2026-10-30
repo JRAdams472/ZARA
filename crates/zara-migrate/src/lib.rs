@@ -34,6 +34,7 @@ pub const PASSWORD_ROLES: &[(&str, &str)] = &[
     ("zara_app_uat", "ZARA_APP_UAT_PASSWORD"),
     ("zara_app_prod", "ZARA_APP_PROD_PASSWORD"),
     ("zara_promote", "ZARA_PROMOTE_PASSWORD"),
+    ("zara_engine", "ZARA_ENGINE_PASSWORD"),
 ];
 
 /// Validate an environment slug and return its schema name.
