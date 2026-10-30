@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # Rust — Cargo.toml + Cargo.lock at the repo root (engine lands in Z2;
+  # dependabot is a no-op until then).
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      rust-minor-patch:
+        update-types: [minor, patch]
+
+  # Workflow actions (actions/*, gitleaks-action, audit-check, ...).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Base images in the root and service Dockerfiles.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  # npm ecosystems are added when their package.json lands —
+  # services/mgmt (Z3) and clients/web (Z5); uncomment at that milestone:
+  # - package-ecosystem: npm
+  #   directory: /services/mgmt
+  #   schedule: { interval: weekly }
+  #   open-pull-requests-limit: 5
+  #   groups:
+  #     npm-minor-patch:
+  #       update-types: [minor, patch]

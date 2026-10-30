@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gitleaks:
+    name: gitleaks — secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  bootstrap:
+    name: Bootstrap — repo hygiene (Z0; real build jobs land with code)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: No secrets in tracked files
+        run: |
+          if grep -rElZ --exclude='.env.example' --exclude-dir=.git \
+               '(SECRET|PASSWORD|TOKEN|KEY)=[^ "$_]{8,}' . | grep -qz .; then
+            echo "Possible committed secret found:"; exit 1
+          fi
+      - name: Compose file validates
+        run: docker compose config --quiet
+      - name: Megaplan + ADRs present
+        run: |
+          test -f docs/megaplan-mpe-113.md
+          test -f docs/adr/README.md
+          test -f AGENTS.md
+
+  # Z2 adds: rust job (fmt / clippy --all-targets -D warnings / test,
+  #   postgres service, sqlx migrations) — MPEx ci.yml pattern.
+  # Z3 adds: mgmt job (npm ci / lint / typecheck / test / build).
+  # Z3 adds: deps job (rustsec/audit-check + filtered npm-audit gate —
+  #   MPE-123 pattern, exception file with justification).
+  # Z5 adds: web job + e2e job (Playwright seeded stack — Dex +
+  #   seeded Postgres + api + web, per-run generated secrets).
+  # Z6 adds: sonarqube scan + quality-gate (MPE-135 pattern).

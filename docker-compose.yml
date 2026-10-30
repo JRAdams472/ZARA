@@ -1,0 +1,59 @@
+# Zara dev stack — Z0 skeleton: data plane + dev IdP + observability.
+# engine (:8400), mgmt (:8401), web (:3400) services are added at their
+# milestones (Z2 / Z3 / Z5). All secrets interpolate from .env (gitignored)
+# and compose fails closed on any unset ${VAR:?}.
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: zara
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_DB: zara
+    ports:
+      - "5532:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zara -d zara"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  dex:
+    # Dev IdP — auth-code+PKCE for the UI, client-credentials for service
+    # accounts (zara-svc, zara-ci). Requires v2.46.0+ for
+    # clientCredentialsEnabled. Prod repoints OIDC_ISSUER at the real IdP.
+    image: dexidp/dex:v2.46.0
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    environment:
+      DEX_ZARA_SVC_SECRET: ${DEX_ZARA_SVC_SECRET:?set DEX_ZARA_SVC_SECRET in .env}
+      DEX_ZARA_CI_SECRET: ${DEX_ZARA_CI_SECRET:?set DEX_ZARA_CI_SECRET in .env}
+      DEX_CLIENT_CREDENTIAL_GRANT_ENABLED_BY_DEFAULT: "true"
+    volumes:
+      - ./dex/config.dev.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5656:5556"
+
+  seq:
+    image: datalust/seq:2025.2
+    environment:
+      ACCEPT_EULA: "Y"
+      # First-boot only: seeds the admin password HASH and requires auth for
+      # log ingestion. Ignored once the data dir exists — see .env.example.
+      SEQ_FIRSTRUN_ADMINPASSWORDHASH: ${SEQ_ADMIN_PASSWORD_HASH:?set SEQ_ADMIN_PASSWORD_HASH in .env}
+      SEQ_FIRSTRUN_REQUIREAUTHENTICATIONFORHTTPINGESTION: "true"
+    ports:
+      - "5641:80"   # UI + ingest
+    volumes:
+      - seqdata:/seq/data
+
+  jaeger:
+    image: jaegertracing/jaeger:2.13.0
+    ports:
+      - "19686:16686"  # UI
+      - "4417:4317"    # OTLP gRPC
+      - "4418:4318"    # OTLP HTTP
+
+volumes:
+  pgdata:
+  seqdata:

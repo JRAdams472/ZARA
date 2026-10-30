@@ -1,0 +1,38 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Env / local
+.env
+.env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.playwright-mcp/
+
+# Devin local configs (contain secrets)
+.devin/mcp_config.local.json
+.devin/config.local.json
+
+# Playwright e2e
+test-results/
+playwright-report/
+blob-report/
+e2e/.auth/
+
+# Local data dirs (tenant vaults, seeded dumps)
+data/
