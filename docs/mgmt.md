@@ -207,6 +207,7 @@ docker compose --profile setup --profile mgmt up -d --build
 ```bash
 cd mgmt
 npm run lint && npm run typecheck && npm test && npm run build
+npm run coverage && npm run coverage:check  # 80%/area floor (covercheck)
 npm run audit:gate          # production dep gate (MPE-123 pattern)
 ```
 

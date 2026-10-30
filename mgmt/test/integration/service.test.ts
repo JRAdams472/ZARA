@@ -160,6 +160,14 @@ describe('grants admin', () => {
 });
 
 describe('rls + append-only', () => {
+  it('tenantIdForSlug resolves registry slugs (active only)', async () => {
+    if (!kit) return;
+    const { tenantIdForSlug } = await import('../../src/db/tenants.js');
+    expect(await tenantIdForSlug(kit.sql, 'acme-mortgage')).toBe(ACME);
+    expect(await tenantIdForSlug(kit.sql, 'northstar-lending')).toBe(NORTHSTAR);
+    expect(await tenantIdForSlug(kit.sql, 'nonexistent')).toBeUndefined();
+  });
+
   it('northstar sees no acme grants through the same role', async () => {
     if (!kit) return;
     const rows = await withTenantTx(kit.sql, NORTHSTAR, (tx) => tx`
