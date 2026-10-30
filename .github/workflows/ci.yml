@@ -112,8 +112,52 @@ jobs:
       - name: Eval latency bench (p95 < 15 ms)
         run: cargo run -p zara-engine --bin zara_bench -- --iterations 200
 
-  # Z2 adds: rust job (fmt / clippy --all-targets -D warnings / test,
-  #   postgres service, sqlx migrations) — MPEx ci.yml pattern.
+  engine:
+    name: Engine — service tests + HTTP bench
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: zara
+          POSTGRES_PASSWORD: pg-${{ github.run_id }}-${{ github.run_attempt }}
+          POSTGRES_DB: zara
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U zara -d zara"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: zara
+      POSTGRES_PASSWORD: pg-${{ github.run_id }}-${{ github.run_attempt }}
+      DATABASE_URL: postgres://zara:pg-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      MIGRATE_DATABASE_URL: postgres://zara_migrate:mig-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      ZARA_MIGRATE_PASSWORD: mig-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_DEV_PASSWORD: dev-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_QA_PASSWORD: qa-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_UAT_PASSWORD: uat-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_PROD_PASSWORD: prod-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_PROMOTE_PASSWORD: pro-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_ENGINE_PASSWORD: eng-${{ github.run_id }}-${{ github.run_attempt }}
+      ENGINE_DATABASE_URL: postgres://zara_engine:eng-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply migrations (bootstrap + control + env ×4)
+        run: cargo run -p zara-migrate -- --set-role-passwords
+      - name: Apply demo seeds
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
+      - name: Service integration tests (JWT gate, PII, seeded eval)
+        run: cargo test -p zara-engine
+      - name: HTTP eval bench (p95 < 15 ms)
+        run: bash tests/latency/bench.sh --tenant acme-mortgage --iterations 200
+
+  # Z2 added: rust job (fmt / clippy / test) + db job (migrate, isolation,
+  #   loader test, zara-bench) + engine job (service tests, HTTP bench).
   # Z3 adds: mgmt job (npm ci / lint / typecheck / test / build).
   # Z3 adds: deps job (rustsec/audit-check + filtered npm-audit gate —
   #   MPE-123 pattern, exception file with justification).

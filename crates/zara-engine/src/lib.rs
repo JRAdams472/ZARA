@@ -8,8 +8,12 @@
 //! eval path does no I/O — snapshots are pre-resolved and evaluation runs on
 //! `!Send` worker threads (zen `Variable` is `Rc`-based).
 
+pub mod api;
+pub mod auth;
+pub mod config;
 pub mod error;
 pub mod eval;
+pub mod limits;
 pub mod loader;
 pub mod pii_guard;
 pub mod snapshot;

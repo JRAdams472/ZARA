@@ -34,5 +34,8 @@ playwright-report/
 blob-report/
 e2e/.auth/
 
+# Ephemeral dev keys minted by zara-devtoken (never commit)
+.devkeys/
+
 # Local data dirs (tenant vaults, seeded dumps)
 data/
