@@ -13,35 +13,35 @@ signature() {
     # drift). Everything else must be identical.
     psql_admin -v "schema=$1" -f - <<'SQL' | sed -e "s/$1/SCHEMA/g" -e 's/zara_app_[a-z]*/APP_ROLE/g' | sort
 WITH s AS (SELECT :'schema'::regnamespace AS ns)
-SELECT 'col|' || c.table_name || '|' || c.column_name || '|' || c.data_type
-            || '|' || c.udt_name || '|' || c.is_nullable
+SELECT 'col|' || c.table_name::text || '|' || c.column_name::text || '|' || c.data_type::text
+            || '|' || c.udt_name::text || '|' || c.is_nullable::text
             || '|' || coalesce(c.column_default, '')
 FROM information_schema.columns c WHERE c.table_schema = :'schema'
 UNION ALL
-SELECT 'con|' || conrelid::regclass::text || '|' || conname || '|' || contype
+SELECT 'con|' || conrelid::regclass::text || '|' || conname::text || '|' || contype::text
             || '|' || pg_get_constraintdef(oid)
 FROM pg_constraint, s WHERE connamespace = s.ns
 UNION ALL
-SELECT 'idx|' || tablename || '|' || indexname || '|' || indexdef
+SELECT 'idx|' || tablename::text || '|' || indexname::text || '|' || indexdef
 FROM pg_indexes WHERE schemaname = :'schema'
 UNION ALL
-SELECT 'trg|' || tgrelid::regclass::text || '|' || tgname || '|' || pg_get_triggerdef(oid)
+SELECT 'trg|' || tgrelid::regclass::text || '|' || tgname::text || '|' || pg_get_triggerdef(oid)
 FROM pg_trigger, s
 WHERE NOT tgisinternal AND tgrelid::regclass::text LIKE :'schema' || '.%'
 UNION ALL
-SELECT 'fn|' || p.proname || '|' || pg_get_functiondef(p.oid)
+SELECT 'fn|' || p.proname::text || '|' || pg_get_functiondef(p.oid)
 FROM pg_proc p, s WHERE p.pronamespace = s.ns
 UNION ALL
-SELECT 'rls|' || relname || '|' || relrowsecurity || '|' || relforcerowsecurity
+SELECT 'rls|' || relname::text || '|' || relrowsecurity::text || '|' || relforcerowsecurity::text
 FROM pg_class, s WHERE relnamespace = s.ns AND relkind = 'r'
 UNION ALL
-SELECT 'pol|' || polrelid::regclass::text || '|' || polname || '|' || polcmd
+SELECT 'pol|' || polrelid::regclass::text || '|' || polname::text || '|' || polcmd::text
             || '|' || coalesce(pg_get_expr(polqual, polrelid), '')
             || '|' || coalesce(pg_get_expr(polwithcheck, polrelid), '')
 FROM pg_policy, s WHERE polrelid::regclass::text LIKE :'schema' || '.%'
 UNION ALL
-SELECT 'grt|' || table_name || '|' || grantor || '|' || grantee
-            || '|' || privilege_type || '|' || is_grantable
+SELECT 'grt|' || table_name::text || '|' || grantor::text || '|' || grantee::text
+            || '|' || privilege_type::text || '|' || is_grantable::text
 FROM information_schema.role_table_grants WHERE table_schema = :'schema'
 ORDER BY 1;
 SQL
