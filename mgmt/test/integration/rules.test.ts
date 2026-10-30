@@ -57,7 +57,7 @@ const rm = () => kit!.mint({ sub: 'rm-subject', envs: ['dev', 'qa', 'uat', 'prod
 const eng = () => kit!.mint({ sub: 'eng-subject', envs: ['dev', 'qa', 'uat'] });
 const aud = () => kit!.mint({ sub: 'aud-subject', envs: ['qa', 'uat'] });
 
-const live = () => kit !== undefined && kit.rulesSql !== undefined && kit.promoteSql !== undefined;
+const live = () => kit?.rulesSql != null && kit.promoteSql != null;
 
 describe('rule lifecycle (DSN-gated)', () => {
   it('create → list → update → publish → sha256', async () => {
