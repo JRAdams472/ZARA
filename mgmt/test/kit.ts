@@ -17,6 +17,12 @@ export const NORTHSTAR = 'bb0215a0-0000-4000-8000-0000000000b2';
 export const TEST_CONFIG: Config = {
   port: 0,
   databaseUrl: process.env.MGMT_DATABASE_URL ?? '',
+  ...(process.env.RULES_DATABASE_URL
+    ? { rulesDatabaseUrl: process.env.RULES_DATABASE_URL }
+    : {}),
+  ...(process.env.PROMOTE_DATABASE_URL
+    ? { promoteDatabaseUrl: process.env.PROMOTE_DATABASE_URL }
+    : {}),
   oidcAudience: [AUDIENCE],
   rateLimitPerMin: 10_000,
   rateLimitMutationsPerMin: 10_000,
@@ -40,6 +46,9 @@ export interface Kit {
   /** Same validator/pool but no cipher — proves unset-KMS 503s. */
   noCipherApp: FastifyInstance;
   sql: postgres.Sql;
+  /** zara_app_dev / zara_promote pools — present when their DSNs are set. */
+  rulesSql?: postgres.Sql;
+  promoteSql?: postgres.Sql;
   /** Present when KMS_URL was set at kit build — cipher-backed tests gate on it. */
   cipher?: FieldCipher;
   mint: (opts: MintOpts) => Promise<string>;
@@ -68,10 +77,14 @@ export async function makeKit(): Promise<Kit | undefined> {
     audience: [AUDIENCE],
   });
   const cipher = createCipher(TEST_CONFIG);
+  const rulesSql = TEST_CONFIG.rulesDatabaseUrl ? postgres(TEST_CONFIG.rulesDatabaseUrl, { max: 4 }) : undefined;
+  const promoteSql = TEST_CONFIG.promoteDatabaseUrl ? postgres(TEST_CONFIG.promoteDatabaseUrl, { max: 4 }) : undefined;
   const app = await buildApp(TEST_CONFIG, {
     sql,
     validator,
     ...(cipher ? { cipher } : {}),
+    ...(rulesSql ? { rulesSql } : {}),
+    ...(promoteSql ? { promoteSql } : {}),
   });
   const noKmsCfg: Config = { ...TEST_CONFIG };
   delete noKmsCfg.kms;
@@ -94,5 +107,13 @@ export async function makeKit(): Promise<Kit | undefined> {
     }
     return jwt.sign(signing);
   };
-  return { app, noCipherApp, sql, ...(cipher ? { cipher } : {}), mint };
+  return {
+    app,
+    noCipherApp,
+    sql,
+    ...(rulesSql ? { rulesSql } : {}),
+    ...(promoteSql ? { promoteSql } : {}),
+    ...(cipher ? { cipher } : {}),
+    mint,
+  };
 }

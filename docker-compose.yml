@@ -190,6 +190,8 @@ services:
     environment:
       PORT: "8401"
       MGMT_DATABASE_URL: postgres://zara_mgmt:${ZARA_MGMT_PASSWORD:?}@db:5432/zara
+      RULES_DATABASE_URL: postgres://zara_app_dev:${ZARA_APP_DEV_PASSWORD:?}@db:5432/zara
+      PROMOTE_DATABASE_URL: postgres://zara_promote:${ZARA_PROMOTE_PASSWORD:?}@db:5432/zara
       ZARA_JWKS_FILE: /run/devkeys/jwks.json
       OIDC_ISSUER: ${ZARA_DEV_ISSUER:-zara-devtoken}
       OIDC_AUDIENCE: ${ZARA_MGMT_AUDIENCE:-zara-mgmt}

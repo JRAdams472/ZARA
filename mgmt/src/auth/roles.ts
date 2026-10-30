@@ -45,6 +45,28 @@ export function scopedEnvs(roles: readonly Role[]): Env[] {
   return ENVS.filter((e) => accessIn(roles, e) !== 'none');
 }
 
+/** Promotion chain — the only legal moves are adjacent steps. The API
+ *  derives the target, so DEV→PROD is inexpressible by construction. */
+const NEXT_ENV: Record<Env, Env | undefined> = {
+  dev: 'qa',
+  qa: 'uat',
+  uat: 'prod',
+  prod: undefined,
+};
+
+export function nextEnv(env: Env): Env | undefined {
+  return NEXT_ENV[env];
+}
+
+/** Promotion authority (MPE-113 role semantics): Release Manager may
+ *  promote into any env incl. PROD sign-off; Rule Engineer promotes
+ *  through UAT only — never into prod; Auditor never promotes. */
+export function canPromote(roles: readonly Role[], toEnv: Env): boolean {
+  if (roles.includes('tenant_release_manager')) return true;
+  if (roles.includes('tenant_rule_engineer')) return toEnv !== 'prod';
+  return false;
+}
+
 export function isRole(s: string): s is Role {
   return (ROLES as readonly string[]).includes(s);
 }

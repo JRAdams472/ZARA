@@ -36,6 +36,12 @@ const CREDENTIAL_SUBSTRINGS = [
   'cookie',
 ];
 
+/** Exported for the write-path PII guard (rules/pii.ts) — same
+ *  normalized denylist the log masker uses. */
+export function isDeniedKey(key: string): boolean {
+  return isDenied(key);
+}
+
 function isDenied(key: string): boolean {
   const k = key.toLowerCase().replace(/[-_]/g, '');
   if (EXACT.has(k)) return true;
