@@ -54,6 +54,48 @@ services:
       - "4417:4317"    # OTLP gRPC
       - "4418:4318"    # OTLP HTTP
 
+  # --- Setup profile (Z1): one-shot data-plane provisioning -------------
+  # `docker compose --profile setup up -d` brings db healthy, applies all
+  # migration sets + role passwords, then loads demo seeds. Both services
+  # exit 0 on success; `compose --profile setup ps` shows them stopped.
+  migrate:
+    profiles: ["setup"]
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Container DSNs reach the db service by name — not the host's
+      # localhost:5532 DSNs from .env; compose builds them from secrets.
+      DATABASE_URL: postgres://zara:${POSTGRES_PASSWORD:?}@db:5432/zara
+      MIGRATE_DATABASE_URL: postgres://zara_migrate:${ZARA_MIGRATE_PASSWORD:?}@db:5432/zara
+      ZARA_MIGRATE_PASSWORD: ${ZARA_MIGRATE_PASSWORD:?}
+      ZARA_APP_DEV_PASSWORD: ${ZARA_APP_DEV_PASSWORD:?}
+      ZARA_APP_QA_PASSWORD: ${ZARA_APP_QA_PASSWORD:?}
+      ZARA_APP_UAT_PASSWORD: ${ZARA_APP_UAT_PASSWORD:?}
+      ZARA_APP_PROD_PASSWORD: ${ZARA_APP_PROD_PASSWORD:?}
+      ZARA_PROMOTE_PASSWORD: ${ZARA_PROMOTE_PASSWORD:?}
+    restart: "no"
+
+  seed:
+    profiles: ["setup"]
+    image: postgres:18-alpine
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./seed:/seed:ro
+    environment:
+      PGPASSWORD: ${ZARA_MIGRATE_PASSWORD:?}
+    # Seeds run as zara_migrate — the only role that writes zara_control;
+    # FORCE RLS still requires SET zara.tenant_id for env-schema DML.
+    entrypoint: ["sh", "-c"]
+    command:
+      - "psql postgres://zara_migrate@db:5432/zara -v ON_ERROR_STOP=1 -f /seed/001_demo_tenants.sql -f /seed/002_demo_fees.sql"
+    restart: "no"
+
 volumes:
   pgdata:
   seqdata:

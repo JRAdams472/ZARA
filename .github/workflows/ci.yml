@@ -93,6 +93,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Apply migrations (bootstrap + control + env ×4)
         run: cargo run -p zara-migrate -- --set-role-passwords
+      - name: Apply demo seeds
+        # Same files/command as the compose `seed` service so CI and the
+        # dev stack stay identical; makes t07 verify (not skip).
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
       - name: Isolation suite
         run: bash tests/isolation/run.sh
 
