@@ -37,7 +37,13 @@ jobs:
           DEX_ZARA_SVC_SECRET: ci-placeholder
           DEX_ZARA_CI_SECRET: ci-placeholder
           SEQ_ADMIN_PASSWORD_HASH: ci-placeholder
-        run: docker compose config --quiet
+          ZARA_MIGRATE_PASSWORD: ci-placeholder
+          ZARA_APP_DEV_PASSWORD: ci-placeholder
+          ZARA_APP_QA_PASSWORD: ci-placeholder
+          ZARA_APP_UAT_PASSWORD: ci-placeholder
+          ZARA_APP_PROD_PASSWORD: ci-placeholder
+          ZARA_PROMOTE_PASSWORD: ci-placeholder
+        run: docker compose --profile setup config --quiet
       - name: Megaplan + ADRs present
         run: |
           test -f docs/megaplan-mpe-113.md
