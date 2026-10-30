@@ -1,0 +1,14 @@
+.git
+.devin
+.env
+.env.*
+node_modules
+target
+dist
+.next
+coverage
+docs
+*.md
+.dockerignore
+Dockerfile
+docker-compose*.yml

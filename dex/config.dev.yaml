@@ -1,0 +1,62 @@
+# Dev-only OIDC issuer for Zara. Serves the UI's auth-code+PKCE flow and
+# the service clients' client-credentials grant (v2.46.0+ flag below).
+# Production just repoints OIDC_ISSUER at the real IdP (Auth0/Okta-class).
+# Static users map to Zara's RBAC roles (megaplan §3.3):
+#   admin       → tenant admin / Release Manager seed
+#   engineer    → Tenant Rule Engineer (DEV edit, promote ≤UAT)
+#   releasemgr  → Tenant Release Manager (all envs + PROD sign-off)
+#   auditor     → Tenant Auditor (QA/UAT view only)
+issuer: http://localhost:5656/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  skipApprovalScreen: true
+  # client_credentials isn't in dex's default grant set — list it for the
+  # service accounts. Also gated by clientCredentialsEnabled / the
+  # DEX_CLIENT_CREDENTIAL_GRANT_ENABLED_BY_DEFAULT env var (dex >= v2.46.0).
+  grantTypes: ["authorization_code", "refresh_token", "client_credentials"]
+  clientCredentialsEnabled: true
+
+logger:
+  level: info
+  format: json
+
+enablePasswordDB: true
+staticPasswords:
+  # Dev credentials — password is the username + "123" (admin123 etc).
+  - email: "admin@zara.dev"
+    hash: "$2b$10$erUgPFIRhvwgr1Q7hVUXt.2i5QLFL2ehOLtDkC1ZBdycAXIdMrjSS"
+    username: "admin"
+    userID: "admin-user"
+  - email: "engineer@zara.dev"
+    hash: "$2b$10$HlGOcHTMdr9SfDSvGXcsq.Ff2ux5gpf32kJsGytulbKDCuBxsTcSq"
+    username: "engineer"
+    userID: "engineer-user"
+  - email: "releasemgr@zara.dev"
+    hash: "$2b$10$HLd5K2t2g5r5Q1PjLkFPeOBtYl7Q0f8nT7oA3a1w8o2l7b9h0sW6"
+    username: "releasemgr"
+    userID: "releasemgr-user"
+  - email: "auditor@zara.dev"
+    hash: "$2b$10$Y55JS88WBjLVjZkYhCNFgeLjku8k.r4jtap3dtielQszVaIwEuy2u"
+    username: "auditor"
+    userID: "auditor-user"
+
+staticClients:
+  - id: zara-web
+    name: "Zara Management UI"
+    public: true
+    redirectURIs:
+      - http://localhost:3400/auth/callback
+  - id: zara-svc
+    name: "Zara service account"
+    secretEnv: DEX_ZARA_SVC_SECRET
+  # CI/admin automation identity — client-credentials mint for seeding and
+  # tooling.
+  - id: zara-ci
+    name: "Zara CI/automation"
+    secretEnv: DEX_ZARA_CI_SECRET
