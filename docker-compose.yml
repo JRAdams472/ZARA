@@ -81,6 +81,38 @@ services:
       ZARA_MGMT_PASSWORD: ${ZARA_MGMT_PASSWORD:?}
     restart: "no"
 
+  # --- KMS (Z3): OpenBao transit for field encryption (ADR-0003) -------
+  # Raft storage survives `compose down`; openbao-init auto-unseals and
+  # mints the scoped zara-mgmt token into gitignored ./data/openbao.
+  # Dev uses a 1-of-1 unseal share — Shamir/sealed ops are a runbook
+  # concern, never this file's.
+  openbao:
+    profiles: ["setup", "mgmt"]
+    image: openbao/openbao:latest
+    command: server # entrypoint already passes -config=/openbao/config
+    ports: ["8320:8200"]
+    volumes:
+      - ./openbao/config:/openbao/config:ro
+      - openbao-data:/openbao/file
+    cap_add: [IPC_LOCK]
+    healthcheck:
+      test: ["CMD-SHELL", "bao status -address=http://localhost:8200 -format=json | grep -q '\"sealed\":false' || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  openbao-init:
+    profiles: ["setup", "mgmt"]
+    image: openbao/openbao:latest
+    entrypoint: ["/bin/sh", "/init.sh"]
+    volumes:
+      - ./openbao/init.sh:/init.sh:ro
+      - ./data/openbao:/out
+    depends_on:
+      openbao:
+        condition: service_started
+    restart: "no"
+
   seed:
     profiles: ["setup"]
     image: postgres:18-alpine
@@ -145,18 +177,27 @@ services:
       migrate:
         condition: service_completed_successfully
         required: false
+      openbao-init:
+        # required:false — without the setup/mgmt profiles the service
+        # still boots; secrets routes then answer 503 (no fallback).
+        condition: service_completed_successfully
+        required: false
     ports:
       - "8401:8401"
     volumes:
       - ./.devkeys:/run/devkeys:ro
+      - ./data/openbao:/run/openbao:ro
     environment:
       PORT: "8401"
       MGMT_DATABASE_URL: postgres://zara_mgmt:${ZARA_MGMT_PASSWORD:?}@db:5432/zara
       ZARA_JWKS_FILE: /run/devkeys/jwks.json
       OIDC_ISSUER: ${ZARA_DEV_ISSUER:-zara-devtoken}
       OIDC_AUDIENCE: ${ZARA_MGMT_AUDIENCE:-zara-mgmt}
+      KMS_URL: http://openbao:8200
+      KMS_TOKEN_FILE: /run/openbao/api-token
     restart: unless-stopped
 
 volumes:
   pgdata:
   seqdata:
+  openbao-data:

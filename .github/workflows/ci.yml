@@ -172,6 +172,14 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U zara -d zara"
           --health-interval 5s --health-timeout 3s --health-retries 12
+      openbao:
+        # Dev-mode (ephemeral, auto-unsealed) — CI-only provisioning;
+        # the compose stack uses raft + openbao/init.sh instead.
+        image: openbao/openbao:latest
+        env:
+          BAO_DEV_ROOT_TOKEN_ID: ci-root-${{ github.run_id }}-${{ github.run_attempt }}
+          BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        ports: ["8200:8200"]
     env:
       PGHOST: localhost
       PGPORT: 5432
@@ -188,6 +196,9 @@ jobs:
       ZARA_ENGINE_PASSWORD: eng-${{ github.run_id }}-${{ github.run_attempt }}
       ZARA_MGMT_PASSWORD: mgmt-${{ github.run_id }}-${{ github.run_attempt }}
       MGMT_DATABASE_URL: postgres://zara_mgmt:mgmt-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      KMS_URL: http://localhost:8200
+      KMS_TOKEN_FILE: ${{ github.workspace }}/data/openbao/api-token
+      BAO_ROOT: ci-root-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -203,6 +214,32 @@ jobs:
         run: cargo run -p zara-migrate -- --set-role-passwords
       - name: Apply demo seeds
         run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
+      - name: Provision transit mount + scoped token (dev OpenBao)
+        run: |
+          set -euo pipefail
+          # Wait for dev-mode unseal
+          for i in $(seq 1 30); do
+            curl -sf "$KMS_URL/v1/sys/seal-status" | grep -q '"sealed":false' && break
+            [ "$i" = 30 ] && { echo "openbao never unsealed"; exit 1; }
+            sleep 2
+          done
+          # Same contract openbao/init.sh enforces: transit mount, the
+          # aes256-gcm96 field key, the crypto-ops-only zara-mgmt policy,
+          # and a scoped token written to the (gitignored) data dir.
+          curl -sf -H "X-Vault-Token: $BAO_ROOT" -X PUT \
+            -d '{"type":"transit"}' "$KMS_URL/v1/sys/mounts/zara-transit"
+          curl -sf -H "X-Vault-Token: $BAO_ROOT" -X POST \
+            -d '{"type":"aes256-gcm96"}' "$KMS_URL/v1/zara-transit/keys/zara-mgmt-secrets"
+          curl -sf -H "X-Vault-Token: $BAO_ROOT" -X PUT \
+            -d '{"policy":"path \"zara-transit/encrypt/*\" { capabilities = [\"create\",\"update\"] }\npath \"zara-transit/decrypt/*\" { capabilities = [\"create\",\"update\"] }\npath \"zara-transit/rewrap/*\" { capabilities = [\"create\",\"update\"] }\npath \"sys/seal-status\" { capabilities = [\"read\"] }"}' \
+            "$KMS_URL/v1/sys/policy/zara-mgmt"
+          mkdir -p data/openbao
+          curl -sf -H "X-Vault-Token: $BAO_ROOT" -X POST \
+            -d '{"policies":["zara-mgmt"],"period":"24h"}' \
+            "$KMS_URL/v1/auth/token/create" \
+            | grep -o '"client_token":"[^"]*"' | cut -d'"' -f4 \
+            > "$KMS_TOKEN_FILE"
+          [ -s "$KMS_TOKEN_FILE" ] || { echo "scoped token mint failed"; exit 1; }
       - name: npm ci
         working-directory: mgmt
         run: npm ci
