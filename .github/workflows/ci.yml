@@ -44,6 +44,58 @@ jobs:
           test -f docs/adr/README.md
           test -f AGENTS.md
 
+  rust:
+    name: Rust — fmt / clippy / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  db:
+    name: DB — migrate + isolation tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: zara
+          POSTGRES_PASSWORD: pg-${{ github.run_id }}-${{ github.run_attempt }}
+          POSTGRES_DB: zara
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U zara -d zara"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: zara
+      POSTGRES_PASSWORD: pg-${{ github.run_id }}-${{ github.run_attempt }}
+      DATABASE_URL: postgres://zara:pg-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      MIGRATE_DATABASE_URL: postgres://zara_migrate:mig-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      # Per-run throwaway role passwords — nothing static in the workflow.
+      ZARA_MIGRATE_PASSWORD: mig-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_DEV_PASSWORD: dev-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_QA_PASSWORD: qa-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_UAT_PASSWORD: uat-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_PROD_PASSWORD: prod-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_PROMOTE_PASSWORD: pro-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply migrations (bootstrap + control + env ×4)
+        run: cargo run -p zara-migrate -- --set-role-passwords
+      - name: Isolation suite
+        run: bash tests/isolation/run.sh
+
   # Z2 adds: rust job (fmt / clippy --all-targets -D warnings / test,
   #   postgres service, sqlx migrations) — MPEx ci.yml pattern.
   # Z3 adds: mgmt job (npm ci / lint / typecheck / test / build).

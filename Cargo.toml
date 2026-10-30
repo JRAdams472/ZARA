@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/zara-migrate"]
+resolver = "2"
