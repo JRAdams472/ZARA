@@ -21,6 +21,9 @@ final_fee = base_fee(scenario)  →  for each alteration rule, in order:
 `base_fee` and `adjustment_set` artifacts are plain JDM decision
 graphs/tables — the alteration set evaluates each row's `when`
 expression and applies its `{op, value}` cell in declared order.
+An `adjustment_set` links to its base fee via `spec.appliesTo`, which
+names the **`base_fee` artifact's `key`** (not its `feeCode`) — an
+alteration can only target a base fee present in the same snapshot.
 
 ### Ops (`adjustment_set` rows)
 
