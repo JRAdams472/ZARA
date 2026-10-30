@@ -43,7 +43,8 @@ jobs:
           ZARA_APP_UAT_PASSWORD: ci-placeholder
           ZARA_APP_PROD_PASSWORD: ci-placeholder
           ZARA_PROMOTE_PASSWORD: ci-placeholder
-        run: docker compose --profile setup config --quiet
+          ZARA_ENGINE_PASSWORD: ci-placeholder
+        run: docker compose --profile setup --profile engine config --quiet
       - name: Megaplan + ADRs present
         run: |
           test -f docs/megaplan-mpe-113.md
