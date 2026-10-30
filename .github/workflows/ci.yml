@@ -30,6 +30,13 @@ jobs:
             echo "Possible committed secret found:"; exit 1
           fi
       - name: Compose file validates
+        # ${VAR:?} interpolation fails closed by design — feed throwaway
+        # values so the check validates structure, not secrets.
+        env:
+          POSTGRES_PASSWORD: ci-placeholder
+          DEX_ZARA_SVC_SECRET: ci-placeholder
+          DEX_ZARA_CI_SECRET: ci-placeholder
+          SEQ_ADMIN_PASSWORD_HASH: ci-placeholder
         run: docker compose config --quiet
       - name: Megaplan + ADRs present
         run: |
