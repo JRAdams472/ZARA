@@ -77,6 +77,7 @@ services:
       ZARA_APP_UAT_PASSWORD: ${ZARA_APP_UAT_PASSWORD:?}
       ZARA_APP_PROD_PASSWORD: ${ZARA_APP_PROD_PASSWORD:?}
       ZARA_PROMOTE_PASSWORD: ${ZARA_PROMOTE_PASSWORD:?}
+      ZARA_ENGINE_PASSWORD: ${ZARA_ENGINE_PASSWORD:?}
     restart: "no"
 
   seed:
@@ -95,6 +96,36 @@ services:
     command:
       - "psql postgres://zara_migrate@db:5432/zara -v ON_ERROR_STOP=1 -f /seed/001_demo_tenants.sql -f /seed/002_demo_fees.sql"
     restart: "no"
+
+  # --- Execution engine (Z2): eval API on :8400 --------------------------
+  # Dev auth runs on an ephemeral static JWKS — generate it first:
+  #   cargo run -p zara-engine --bin zara_devtoken -- \
+  #     --tenant-id <tenant-uuid> --jwks-out .devkeys/jwks.json --key-out .devkeys/dev.pem
+  # (see docs/engine.md). For a real issuer drop ZARA_JWKS_FILE and point
+  # OIDC_ISSUER/OIDC_JWKS_URL at the IdP instead.
+  engine:
+    profiles: ["engine"]
+    build:
+      context: .
+      dockerfile: Dockerfile.engine
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+        required: false # also startable without the setup profile
+    ports:
+      - "8400:8400"
+    volumes:
+      - ./.devkeys:/run/devkeys:ro
+    environment:
+      PORT: "8400"
+      ENGINE_DATABASE_URL: postgres://zara_engine:${ZARA_ENGINE_PASSWORD:?}@db:5432/zara
+      ZARA_JWKS_FILE: /run/devkeys/jwks.json
+      OIDC_ISSUER: ${ZARA_DEV_ISSUER:-zara-devtoken}
+      OIDC_AUDIENCE: ${ZARA_DEV_AUDIENCE:-zara-engine}
+      SNAPSHOT_POLL_MS: ${SNAPSHOT_POLL_MS:-30000}
+    restart: unless-stopped
 
 volumes:
   pgdata:

@@ -7,9 +7,13 @@ Node.js/TypeScript management plane (JDM rule editor, RBAC gatekeeper,
 payloads in under 15 ms — over a shared PostgreSQL cluster with
 schema-per-environment isolation and row-level tenant security.
 
-**Status:** Z1 data plane landed — schemas/roles/RLS plus demo seeds via
+**Status:** Z2 execution engine landed — `zara-engine` serves
+`POST /api/evaluate/{env}` on `:8400` behind JWT auth, per-IP limits, and a
+PII-free eval boundary, backed by hot per-(env,tenant) JDM snapshots
+(service guide: [docs/engine.md](docs/engine.md)). Z1 data plane
+(schemas/roles/RLS + demo seeds) provisions via
 `docker compose --profile setup up -d` (runbook:
-[docs/data-plane.md](docs/data-plane.md)). Execution engine lands in Z2.
+[docs/data-plane.md](docs/data-plane.md)). Management plane lands in Z3.
 
 ## Documentation
 
@@ -17,6 +21,9 @@ schema-per-environment isolation and row-level tenant security.
 |---|---|
 | [docs/megaplan-mpe-113.md](docs/megaplan-mpe-113.md) | Milestone plan + security invariants (Linear parent: MPE-113) |
 | [docs/adr/](docs/adr/README.md) | Locked architecture decisions |
+| [docs/data-plane.md](docs/data-plane.md) | Z1 runbook — schemas, roles, RLS, seeds |
+| [docs/engine.md](docs/engine.md) | Z2 service guide — endpoints, claims, dev tokens, bench |
+| [docs/fee-model.md](docs/fee-model.md) | Fee rule model — base_fee + adjustment_set |
 | [AGENTS.md](AGENTS.md) | Workflow, invariants, verification rules |
 
 ## Stack (locked)

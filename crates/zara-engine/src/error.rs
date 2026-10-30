@@ -1,7 +1,12 @@
-//! Engine error type. HTTP mapping (`IntoResponse` + status codes) lands
-//! with the axum surface in phase 2; the core already distinguishes the
-//! classes so denial paths can never degrade to a generic 500.
+//! Engine error type + HTTP mapping. Denial classes map to distinct status
+//! codes so a rejection can never degrade to a generic 500 (ADR-0005).
+//! PII-guard rejections arrive as `BadRequest` carrying the field path only —
+//! the guard constructs the message, this layer never adds detail.
 
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::Json;
+use serde_json::json;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -24,4 +29,45 @@ pub enum AppError {
     /// Everything else — logged in detail, surfaced generically.
     #[error("{0}")]
     Internal(String),
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        if let AppError::TooManyRequests {
+            bucket,
+            retry_after,
+        } = &self
+        {
+            let mut res = (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({
+                    "error": format!("rate limited ({bucket} bucket)"),
+                    "retryAfter": retry_after,
+                })),
+            )
+                .into_response();
+            res.headers_mut().insert(
+                axum::http::header::RETRY_AFTER,
+                axum::http::HeaderValue::from(*retry_after),
+            );
+            return res;
+        }
+        let (status, message) = match &self {
+            AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone()),
+            AppError::Unauthorized(m) => (StatusCode::UNAUTHORIZED, m.clone()),
+            AppError::Forbidden(m) => (StatusCode::FORBIDDEN, m.clone()),
+            AppError::Internal(m) => {
+                tracing::error!(error = %m, "internal error");
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into())
+            }
+            AppError::TooManyRequests { .. } => unreachable!(),
+        };
+        (status, Json(json!({ "error": message }))).into_response()
+    }
+}
+
+impl From<anyhow::Error> for AppError {
+    fn from(e: anyhow::Error) -> Self {
+        Self::Internal(e.to_string())
+    }
 }

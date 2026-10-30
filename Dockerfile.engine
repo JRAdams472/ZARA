@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1
+# zara-engine image — the execution-plane HTTP service (:8400). sqlx and
+# reqwest are rustls-only so no OpenSSL runtime is needed.
+
+FROM rust:1-bookworm AS build
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+RUN cargo build --release --locked -p zara-engine --bin zara_engine
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /app/target/release/zara_engine /usr/local/bin/zara-engine
+EXPOSE 8400
+ENTRYPOINT ["zara-engine"]
