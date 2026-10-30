@@ -252,6 +252,11 @@ jobs:
       - name: Unit + integration tests (zara_mgmt role, real RLS)
         working-directory: mgmt
         run: npm test
+      - name: Coverage floor (80%/area — covercheck)
+        working-directory: mgmt
+        run: |
+          npm run coverage
+          npm run coverage:check
       - name: Build
         working-directory: mgmt
         run: npm run build

@@ -32,8 +32,8 @@ export interface Config {
   };
 }
 
-function required(name: string): string {
-  const v = process.env[name];
+function required(env: NodeJS.ProcessEnv, name: string): string {
+  const v = env[name];
   if (!v) throw new Error(`${name} is required`);
   return v;
 }
@@ -61,7 +61,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   return {
     port: num(env, 'PORT', 8401),
-    databaseUrl: required('MGMT_DATABASE_URL'),
+    databaseUrl: required(env, 'MGMT_DATABASE_URL'),
     ...(oidcIssuer ? { oidcIssuer } : {}),
     oidcAudience: (env.OIDC_AUDIENCE ?? 'zara-mgmt')
       .split(',')
