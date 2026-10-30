@@ -7,9 +7,9 @@ Node.js/TypeScript management plane (JDM rule editor, RBAC gatekeeper,
 payloads in under 15 ms — over a shared PostgreSQL cluster with
 schema-per-environment isolation and row-level tenant security.
 
-**Status:** bootstrap — the repo currently carries the megaplan,
-architecture decision records, agent rules, and tooling skeleton only.
-Application code lands with milestones Z1+.
+**Status:** Z1 data plane landed — schemas/roles/RLS plus demo seeds via
+`docker compose --profile setup up -d` (runbook:
+[docs/data-plane.md](docs/data-plane.md)). Execution engine lands in Z2.
 
 ## Documentation
 

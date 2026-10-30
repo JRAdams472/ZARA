@@ -1,0 +1,20 @@
+# syntax=docker/dockerfile:1
+# zara-migrate image — applies the three migration sets (bootstrap /
+# control / env ×4) and provisions role passwords from env vars. Used by
+# the compose `setup` profile; sqlx is rustls-only so no OpenSSL runtime.
+
+FROM rust:1-bookworm AS build
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+RUN cargo build --release --locked -p zara-migrate
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /app/target/release/zara-migrate /usr/local/bin/zara-migrate
+COPY migrations /migrations
+ENV ZARA_MIGRATIONS_DIR=/migrations
+ENTRYPOINT ["zara-migrate"]
+CMD ["--set-role-passwords"]

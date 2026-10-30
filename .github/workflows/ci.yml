@@ -37,7 +37,13 @@ jobs:
           DEX_ZARA_SVC_SECRET: ci-placeholder
           DEX_ZARA_CI_SECRET: ci-placeholder
           SEQ_ADMIN_PASSWORD_HASH: ci-placeholder
-        run: docker compose config --quiet
+          ZARA_MIGRATE_PASSWORD: ci-placeholder
+          ZARA_APP_DEV_PASSWORD: ci-placeholder
+          ZARA_APP_QA_PASSWORD: ci-placeholder
+          ZARA_APP_UAT_PASSWORD: ci-placeholder
+          ZARA_APP_PROD_PASSWORD: ci-placeholder
+          ZARA_PROMOTE_PASSWORD: ci-placeholder
+        run: docker compose --profile setup config --quiet
       - name: Megaplan + ADRs present
         run: |
           test -f docs/megaplan-mpe-113.md
@@ -93,6 +99,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Apply migrations (bootstrap + control + env ×4)
         run: cargo run -p zara-migrate -- --set-role-passwords
+      - name: Apply demo seeds
+        # Same files/command as the compose `seed` service so CI and the
+        # dev stack stay identical; makes t07 verify (not skip).
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
       - name: Isolation suite
         run: bash tests/isolation/run.sh
 
