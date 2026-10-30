@@ -78,6 +78,7 @@ services:
       ZARA_APP_PROD_PASSWORD: ${ZARA_APP_PROD_PASSWORD:?}
       ZARA_PROMOTE_PASSWORD: ${ZARA_PROMOTE_PASSWORD:?}
       ZARA_ENGINE_PASSWORD: ${ZARA_ENGINE_PASSWORD:?}
+      ZARA_MGMT_PASSWORD: ${ZARA_MGMT_PASSWORD:?}
     restart: "no"
 
   seed:
@@ -125,6 +126,35 @@ services:
       OIDC_ISSUER: ${ZARA_DEV_ISSUER:-zara-devtoken}
       OIDC_AUDIENCE: ${ZARA_DEV_AUDIENCE:-zara-engine}
       SNAPSHOT_POLL_MS: ${SNAPSHOT_POLL_MS:-30000}
+    restart: unless-stopped
+
+  # --- Management plane (Z3): Node/TS gatekeeper on :8401 ---------------
+  # Shares the .devkeys JWKS contract with the engine, but its audience is
+  # zara-mgmt — mint a mgmt token with:
+  #   node mgmt/scripts/devtoken.mjs --tenant-id <uuid> --envs dev,qa,uat,prod \
+  #     --aud zara-mgmt --key-in .devkeys/dev.pem --jwks-out .devkeys/jwks.json
+  # (or crates' zara_devtoken with matching --audience). See docs/engine.md.
+  mgmt:
+    profiles: ["mgmt"]
+    build:
+      context: .
+      dockerfile: Dockerfile.mgmt
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+        required: false
+    ports:
+      - "8401:8401"
+    volumes:
+      - ./.devkeys:/run/devkeys:ro
+    environment:
+      PORT: "8401"
+      MGMT_DATABASE_URL: postgres://zara_mgmt:${ZARA_MGMT_PASSWORD:?}@db:5432/zara
+      ZARA_JWKS_FILE: /run/devkeys/jwks.json
+      OIDC_ISSUER: ${ZARA_DEV_ISSUER:-zara-devtoken}
+      OIDC_AUDIENCE: ${ZARA_MGMT_AUDIENCE:-zara-mgmt}
     restart: unless-stopped
 
 volumes:

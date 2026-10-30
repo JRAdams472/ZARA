@@ -1,0 +1,19 @@
+# zara-mgmt image — the management-plane service (:8401).
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+COPY mgmt/package.json mgmt/package-lock.json ./
+RUN npm ci
+COPY mgmt/tsconfig.json ./
+COPY mgmt/src ./src
+RUN npm run build && npm prune --omit=dev
+
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production
+WORKDIR /app
+RUN groupadd -r zara && useradd -r -g zara zara
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY mgmt/package.json ./
+USER zara
+EXPOSE 8401
+ENTRYPOINT ["node", "dist/server.js"]
