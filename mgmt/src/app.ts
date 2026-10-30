@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type postgres from 'postgres';
 import type { Config } from './config.js';
 import type { JwtValidator } from './auth/jwks.js';
+import type { FieldCipher } from './kms/index.js';
 import { registerAuthGate } from './plugins/auth.js';
 import { registerRateLimits } from './plugins/rateLimit.js';
 import { registerSecurityHeaders } from './plugins/security.js';
@@ -11,16 +12,27 @@ import { registerWhoami } from './routes/whoami.js';
 import { registerEnvContext } from './routes/envContext.js';
 import { registerGrants } from './routes/grants.js';
 import { registerAudit } from './routes/audit.js';
+import { registerSecrets } from './routes/secrets.js';
+import { LOG_FORMATTERS, LOG_REDACT } from './log/redact.js';
 
 export interface AppDeps {
   sql: postgres.Sql;
   validator: JwtValidator;
+  /** Undefined when KMS_URL is unset — secrets routes then 503. */
+  cipher?: FieldCipher;
 }
 
 export async function buildApp(cfg: Config, deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
     bodyLimit: 1024 * 1024, // JDM graphs arrive at Z4 — 1 MB ceiling.
-    logger: { level: process.env.LOG_LEVEL ?? 'info' },
+    logger: {
+      level: process.env.LOG_LEVEL ?? 'info',
+      // ADR-0005: credential-shaped values can never reach a log line —
+      // denylist walker over every log object + pino path censor for
+      // transport carriers. Both layers are versioned in code.
+      redact: LOG_REDACT,
+      formatters: LOG_FORMATTERS,
+    },
     trustProxy: cfg.rateLimitTrustXff,
   });
   app.setErrorHandler((e: unknown, _req, reply) => {
@@ -49,5 +61,6 @@ export async function buildApp(cfg: Config, deps: AppDeps): Promise<FastifyInsta
   registerEnvContext(app);
   registerGrants(app, deps.sql);
   registerAudit(app, deps.sql);
+  registerSecrets(app, deps.sql, deps.cipher);
   return app;
 }

@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { JwtValidator } from '../src/auth/jwks.js';
 import type { Config } from '../src/config.js';
+import { createCipher, type FieldCipher } from '../src/kms/index.js';
 
 export const ISSUER = 'https://test-issuer.invalid';
 export const AUDIENCE = 'zara-mgmt';
@@ -21,11 +22,26 @@ export const TEST_CONFIG: Config = {
   rateLimitMutationsPerMin: 10_000,
   rateLimitDisable: true,
   rateLimitTrustXff: false,
+  ...(process.env.KMS_URL
+    ? {
+        kms: {
+          url: process.env.KMS_URL,
+          ...(process.env.KMS_TOKEN_FILE ? { tokenFile: process.env.KMS_TOKEN_FILE } : {}),
+          ...(process.env.KMS_TOKEN ? { token: process.env.KMS_TOKEN } : {}),
+          mount: process.env.KMS_MOUNT ?? 'zara-transit',
+          keyName: process.env.KMS_KEY_NAME ?? 'zara-mgmt-secrets',
+        },
+      }
+    : {}),
 };
 
 export interface Kit {
   app: FastifyInstance;
+  /** Same validator/pool but no cipher — proves unset-KMS 503s. */
+  noCipherApp: FastifyInstance;
   sql: postgres.Sql;
+  /** Present when KMS_URL was set at kit build — cipher-backed tests gate on it. */
+  cipher?: FieldCipher;
   mint: (opts: MintOpts) => Promise<string>;
 }
 
@@ -51,7 +67,15 @@ export async function makeKit(): Promise<Kit | undefined> {
     issuer: ISSUER,
     audience: [AUDIENCE],
   });
-  const app = await buildApp(TEST_CONFIG, { sql, validator });
+  const cipher = createCipher(TEST_CONFIG);
+  const app = await buildApp(TEST_CONFIG, {
+    sql,
+    validator,
+    ...(cipher ? { cipher } : {}),
+  });
+  const noKmsCfg: Config = { ...TEST_CONFIG };
+  delete noKmsCfg.kms;
+  const noCipherApp = await buildApp(noKmsCfg, { sql, validator });
   const signing = privateKey; // jose signs with the CryptoKey directly
 
   const mint = async (o: MintOpts) => {
@@ -70,5 +94,5 @@ export async function makeKit(): Promise<Kit | undefined> {
     }
     return jwt.sign(signing);
   };
-  return { app, sql, mint };
+  return { app, noCipherApp, sql, ...(cipher ? { cipher } : {}), mint };
 }

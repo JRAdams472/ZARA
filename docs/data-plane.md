@@ -83,6 +83,18 @@ across all four env schemas — schema drift fails CI.
 Apply from the host: `cargo run -p zara-migrate` (env DSNs from `.env`),
 or re-run the compose `migrate` service.
 
+## Control-plane tables (Z3)
+
+`control/0003` owns the management-plane tables, all tenant-scoped under
+FORCE RLS: `role_grants` (subject → RBAC role, resolved per request —
+see `docs/mgmt.md`), `audit_events` (append-only per-tenant hash chain),
+and `tenant_secrets`. `tenant_secrets` stores **`vault:vN:` ciphertext
+envelopes only** — sealed by the OpenBao transit seam (ADR-0003) before
+insert; the plaintext never reaches the database. `zara_mgmt` holds
+`SELECT`+`INSERT`/`UPDATE` on it; DELETE is not granted anywhere. The
+secret value itself is managed through the mgmt API
+(`PUT/POST /api/admin/secrets/…`), never by direct SQL.
+
 ## Seeds and reset
 
 `seed/001_demo_tenants.sql` (control registry) + `seed/002_demo_fees.sql`

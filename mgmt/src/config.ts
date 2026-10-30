@@ -19,6 +19,17 @@ export interface Config {
   rateLimitMutationsPerMin: number;
   rateLimitDisable: boolean;
   rateLimitTrustXff: boolean;
+  /** KMS seam (ADR-0003) — undefined when KMS_URL is unset; secrets
+   *  routes then answer 503. Never an insecure local fallback. */
+  kms?: {
+    url: string;
+    /** Scoped token file (compose mounts data/openbao). */
+    tokenFile?: string;
+    /** Inline token — test/CI convenience only. */
+    token?: string;
+    mount: string;
+    keyName: string;
+  };
 }
 
 function required(name: string): string {
@@ -62,5 +73,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     rateLimitMutationsPerMin: num(env, 'RATE_LIMIT_MUTATIONS_PER_MIN', 30),
     rateLimitDisable: 'RATE_LIMIT_DISABLE' in env,
     rateLimitTrustXff: 'RATE_LIMIT_TRUST_XFF' in env,
+    ...(env.KMS_URL
+      ? {
+          kms: {
+            url: env.KMS_URL,
+            ...(env.KMS_TOKEN_FILE ? { tokenFile: env.KMS_TOKEN_FILE } : {}),
+            ...(env.KMS_TOKEN ? { token: env.KMS_TOKEN } : {}),
+            mount: env.KMS_MOUNT ?? 'zara-transit',
+            keyName: env.KMS_KEY_NAME ?? 'zara-mgmt-secrets',
+          },
+        }
+      : {}),
   };
 }

@@ -7,10 +7,12 @@ Node.js/TypeScript management plane (JDM rule editor, RBAC gatekeeper,
 payloads in under 15 ms — over a shared PostgreSQL cluster with
 schema-per-environment isolation and row-level tenant security.
 
-**Status:** Z3 Phase 1 management plane landed — `zara-mgmt` (Fastify +
-postgres.js) serves RBAC grants admin, env-scoped authorization, and the
-per-tenant hash-chained audit trail on `:8401` behind deny-first JWT
-gating (service guide: [docs/mgmt.md](docs/mgmt.md)). Z2 execution engine:
+**Status:** Z3 management plane complete — `zara-mgmt` (Fastify +
+postgres.js) serves RBAC grants admin, env-scoped authorization, the
+per-tenant hash-chained audit trail, and OpenBao-sealed tenant secrets
+(`vault:v1:` envelopes, metadata-only API, RBAC-scoped serialization)
+on `:8401` behind deny-first JWT gating (service guide:
+[docs/mgmt.md](docs/mgmt.md)). Z2 execution engine:
 `zara-engine` serves `POST /api/evaluate/{env}` on `:8400`
 ([docs/engine.md](docs/engine.md)). Z1 data plane (schemas/roles/RLS +
 demo seeds) provisions via `docker compose --profile setup up -d`
@@ -24,7 +26,7 @@ demo seeds) provisions via `docker compose --profile setup up -d`
 | [docs/adr/](docs/adr/README.md) | Locked architecture decisions |
 | [docs/data-plane.md](docs/data-plane.md) | Z1 runbook — schemas, roles, RLS, seeds |
 | [docs/engine.md](docs/engine.md) | Z2 service guide — endpoints, claims, dev tokens, bench |
-| [docs/mgmt.md](docs/mgmt.md) | Z3 service guide — RBAC, grants admin, audit chain, env gate |
+| [docs/mgmt.md](docs/mgmt.md) | Z3 service guide — RBAC, grants admin, audit chain, secrets/KMS, masking |
 | [docs/fee-model.md](docs/fee-model.md) | Fee rule model — base_fee + adjustment_set |
 | [AGENTS.md](AGENTS.md) | Workflow, invariants, verification rules |
 
