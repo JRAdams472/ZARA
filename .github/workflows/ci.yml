@@ -107,6 +107,8 @@ jobs:
         run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
       - name: Isolation suite
         run: bash tests/isolation/run.sh
+      - name: Engine loader test (zara_engine role + RLS)
+        run: cargo test -p zara-engine --test loader
       - name: Eval latency bench (p95 < 15 ms)
         run: cargo run -p zara-engine --bin zara_bench -- --iterations 200
 
