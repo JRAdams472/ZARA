@@ -13,6 +13,8 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
 import RuleIcon from '@mui/icons-material/AccountTree';
 import HistoryIcon from '@mui/icons-material/History';
+import AdminIcon from '@mui/icons-material/AdminPanelSettings';
+import AuditIcon from '@mui/icons-material/FactCheck';
 import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
@@ -43,6 +45,11 @@ function highestRole(roles: readonly Role[]): Role | undefined {
 const NAV = [
   { suffix: 'rules', label: 'Rules', icon: <RuleIcon fontSize="small" /> },
   { suffix: 'promotions', label: 'Promotions', icon: <HistoryIcon fontSize="small" /> },
+];
+
+const ADMIN_NAV = [
+  { href: '/admin/grants', label: 'Role grants', icon: <AdminIcon fontSize="small" /> },
+  { href: '/admin/audit', label: 'Audit trail', icon: <AuditIcon fontSize="small" /> },
 ];
 
 export default function AppShell({
@@ -163,6 +170,28 @@ export default function AppShell({
               </ListItemButton>
             ))}
           </List>
+          {whoami.roles.includes('tenant_release_manager') && (
+            <>
+              <Divider sx={{ my: 1.5 }} />
+              <Typography variant="overline" color="text.secondary" sx={{ px: 1 }}>
+                Tenant admin
+              </Typography>
+              <List dense>
+                {ADMIN_NAV.map((n) => (
+                  <ListItemButton
+                    key={n.href}
+                    component={Link}
+                    href={n.href}
+                    selected={pathname === n.href}
+                    sx={{ borderRadius: 1, gap: 1.5 }}
+                  >
+                    {n.icon}
+                    <ListItemText primary={n.label} />
+                  </ListItemButton>
+                ))}
+              </List>
+            </>
+          )}
           <Divider sx={{ my: 1.5 }} />
           <Typography variant="caption" color="text.secondary" sx={{ px: 1, display: 'block' }}>
             Access: {whoami.envAccess[env]}

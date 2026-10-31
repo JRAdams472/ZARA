@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { firstEffectiveEnv } from '@/lib/api';
+import { isReleaseManager, promoteTargetFor } from '@/lib/gate';
 import type { Whoami } from '@/lib/types';
 
 const base: Whoami = {
@@ -63,5 +64,35 @@ describe('env gating (claims ∩ role scope)', () => {
 
   it('empty effective set → undefined (routes to /no-access)', () => {
     expect(firstEffectiveEnv(base)).toBeUndefined();
+  });
+});
+
+describe('promotion gating (mirrors mgmt canPromote)', () => {
+  const engineer: Whoami = { ...base, roles: ['tenant_rule_engineer'] };
+  const rm: Whoami = { ...base, roles: ['tenant_release_manager'] };
+  const auditor: Whoami = { ...base, roles: ['tenant_auditor'] };
+
+  it('engineer promotes through UAT only — never into PROD', () => {
+    expect(promoteTargetFor(engineer, 'dev')).toBe('qa');
+    expect(promoteTargetFor(engineer, 'qa')).toBe('uat');
+    expect(promoteTargetFor(engineer, 'uat')).toBeNull(); // prod sign-off is RM-only
+    expect(promoteTargetFor(engineer, 'prod')).toBeNull();
+  });
+
+  it('release manager promotes everywhere incl. PROD', () => {
+    expect(promoteTargetFor(rm, 'uat')).toBe('prod');
+    expect(promoteTargetFor(rm, 'dev')).toBe('qa');
+    expect(promoteTargetFor(rm, 'prod')).toBeNull(); // no successor
+  });
+
+  it('auditor never promotes', () => {
+    expect(promoteTargetFor(auditor, 'dev')).toBeNull();
+    expect(promoteTargetFor(auditor, 'uat')).toBeNull();
+  });
+
+  it('admin surfaces are RM-only', () => {
+    expect(isReleaseManager(rm)).toBe(true);
+    expect(isReleaseManager(engineer)).toBe(false);
+    expect(isReleaseManager(auditor)).toBe(false);
   });
 });

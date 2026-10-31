@@ -13,6 +13,7 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 
+import PromoteButton from './PromoteButton';
 import StatusChip from './StatusChip';
 import type { Env, RuleMeta } from '@/lib/types';
 
@@ -24,10 +25,14 @@ export default function RulesTable({
   env,
   rules,
   canWrite,
+  promoteTarget,
 }: {
   env: Env;
   rules: RuleMeta[];
   canWrite: boolean;
+  /** Derived successor env when the caller may promote into it, else
+   *  null — published rows get the affordance, drafts never do. */
+  promoteTarget: Env | null;
 }) {
   const [filter, setFilter] = useState('');
   const q = filter.trim().toLowerCase();
@@ -71,6 +76,7 @@ export default function RulesTable({
               <TableCell>SHA-256</TableCell>
               <TableCell>Updated</TableCell>
               <TableCell>Published</TableCell>
+              <TableCell align="right" />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -95,11 +101,21 @@ export default function RulesTable({
                 </TableCell>
                 <TableCell>{new Date(r.updatedAt).toLocaleString()}</TableCell>
                 <TableCell>{r.publishedAt ? new Date(r.publishedAt).toLocaleString() : '—'}</TableCell>
+                <TableCell align="right">
+                  {r.status === 'published' && promoteTarget ? (
+                    <PromoteButton
+                      env={env}
+                      ruleKey={r.key}
+                      toEnv={promoteTarget}
+                      sha256={r.sha256}
+                    />
+                  ) : null}
+                </TableCell>
               </TableRow>
             ))}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} sx={{ color: 'text.secondary' }}>
+                <TableCell colSpan={7} sx={{ color: 'text.secondary' }}>
                   No artifacts match &ldquo;{filter}&rdquo; — clear the filter to see all.
                 </TableCell>
               </TableRow>

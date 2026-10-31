@@ -40,3 +40,37 @@ export interface PromotionRow {
   promotedBy: string;
   promotedAt: string;
 }
+
+export interface PromoteResult {
+  key: string;
+  fromEnv: string;
+  toEnv: string;
+  artifactId: string;
+  sha256: string;
+  published: boolean;
+  fingerprint?: string;
+}
+
+export interface GrantRow {
+  id: string;
+  subjectType: string;
+  subject: string;
+  role: string;
+  grantedBy: string;
+  grantedAt: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  occurredAt: string;
+  actorSub: string;
+  action: string;
+  detail: unknown;
+}
+
+export interface AuditVerifyResult {
+  checked: number;
+  ok: boolean;
+  firstBadId?: string;
+  reason?: string;
+}

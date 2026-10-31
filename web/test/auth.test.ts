@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SignJWT, generateKeyPair, exportJWK } from 'jose';
+import { SignJWT, generateKeyPair } from 'jose';
 
 const jar = new Map<string, string>();
 vi.mock('next/headers', () => ({

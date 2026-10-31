@@ -293,6 +293,169 @@ jobs:
         working-directory: web
         run: npm run build
 
+  e2e:
+    name: E2E — Playwright (seeded stack)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: zara
+          POSTGRES_PASSWORD: pg-${{ github.run_id }}-${{ github.run_attempt }}
+          POSTGRES_DB: zara
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U zara -d zara"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      openbao:
+        # Dev-mode (ephemeral, auto-unsealed) — CI-only provisioning;
+        # the compose stack uses raft + openbao/init.sh instead.
+        image: openbao/openbao:latest
+        env:
+          BAO_DEV_ROOT_TOKEN_ID: ci-root-${{ github.run_id }}-${{ github.run_attempt }}
+          BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        ports: ["8200:8200"]
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: zara
+      POSTGRES_PASSWORD: pg-${{ github.run_id }}-${{ github.run_attempt }}
+      DATABASE_URL: postgres://zara:pg-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      MIGRATE_DATABASE_URL: postgres://zara_migrate:mig-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      ZARA_MIGRATE_PASSWORD: mig-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_DEV_PASSWORD: dev-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_QA_PASSWORD: qa-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_UAT_PASSWORD: uat-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_APP_PROD_PASSWORD: prod-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_PROMOTE_PASSWORD: pro-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_ENGINE_PASSWORD: eng-${{ github.run_id }}-${{ github.run_attempt }}
+      ZARA_MGMT_PASSWORD: mgmt-${{ github.run_id }}-${{ github.run_attempt }}
+      MGMT_DATABASE_URL: postgres://zara_mgmt:mgmt-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      RULES_DATABASE_URL: postgres://zara_app_dev:dev-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      PROMOTE_DATABASE_URL: postgres://zara_promote:pro-${{ github.run_id }}-${{ github.run_attempt }}@localhost:5432/zara
+      KMS_URL: http://localhost:8200
+      KMS_TOKEN_FILE: ${{ github.workspace }}/data/openbao/api-token
+      BAO_ROOT: ci-root-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mgmt/package-lock.json
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply migrations (bootstrap + control + env ×4)
+        run: cargo run -p zara-migrate -- --set-role-passwords
+      - name: Apply demo seeds
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql
+      - name: Provision transit mount + scoped token (dev OpenBao)
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            curl -sf "$KMS_URL/v1/sys/seal-status" | grep -q '"sealed":false' && break
+            [ "$i" = 30 ] && { echo "openbao never unsealed"; exit 1; }
+            sleep 2
+          done
+          # Same contract openbao/init.sh enforces: transit mount, the
+          # aes256-gcm96 field key, the crypto-ops-only zara-mgmt policy,
+          # and a scoped token written to the (gitignored) data dir.
+          curl -sf -H "X-Vault-Token: $BAO_ROOT" -X PUT \
+            -d '{"type":"transit"}' "$KMS_URL/v1/sys/mounts/zara-transit"
+          curl -sf -H "X-Vault-Token: $BAO_ROOT" -X POST \
+            -d '{"type":"aes256-gcm96"}' "$KMS_URL/v1/zara-transit/keys/zara-mgmt-secrets"
+          curl -sf -H "X-Vault-Token: $BAO_ROOT" -X PUT \
+            -d '{"policy":"path \"zara-transit/encrypt/*\" { capabilities = [\"create\",\"update\"] }\npath \"zara-transit/decrypt/*\" { capabilities = [\"create\",\"update\"] }\npath \"zara-transit/rewrap/*\" { capabilities = [\"create\",\"update\"] }\npath \"sys/seal-status\" { capabilities = [\"read\"] }"}' \
+            "$KMS_URL/v1/sys/policy/zara-mgmt"
+          mkdir -p data/openbao
+          curl -sf -H "X-Vault-Token: $BAO_ROOT" -X POST \
+            -d '{"policies":["zara-mgmt"],"period":"24h"}' \
+            "$KMS_URL/v1/auth/token/create" \
+            | grep -o '"client_token":"[^"]*"' | cut -d'"' -f4 \
+            > "$KMS_TOKEN_FILE"
+          [ -s "$KMS_TOKEN_FILE" ] || { echo "scoped token mint failed"; exit 1; }
+      - name: Start Dex (dev IdP)
+        env:
+          DEX_ZARA_SVC_SECRET: svc-${{ github.run_id }}-${{ github.run_attempt }}
+          DEX_ZARA_CI_SECRET: ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          docker run -d --name dex -p 5656:5556 \
+            -v "$PWD/dex/config.dev.yaml:/etc/dex/config.yaml" \
+            -e "DEX_ZARA_SVC_SECRET=$DEX_ZARA_SVC_SECRET" \
+            -e "DEX_ZARA_CI_SECRET=$DEX_ZARA_CI_SECRET" \
+            dexidp/dex:v2.46.0 dex serve /etc/dex/config.yaml
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5656/dex/.well-known/openid-configuration >/dev/null && break
+            [ "$i" = 30 ] && { echo "Dex did not come up"; exit 1; }
+            sleep 1
+          done
+      - name: npm ci + build mgmt
+        working-directory: mgmt
+        run: |
+          npm ci
+          npm run build
+      - name: Generate devkeys (shared JWKS contract)
+        working-directory: mgmt
+        run: |
+          mkdir -p ../.devkeys
+          node scripts/devtoken.mjs --tenant-id aa5ce000-0000-4000-8000-0000000000ac \
+            --envs dev --aud zara-mgmt \
+            --jwks-out ../.devkeys/jwks.json --key-out ../.devkeys/dev.pem > /dev/null
+      - name: Start mgmt
+        working-directory: mgmt
+        env:
+          ZARA_JWKS_FILE: ${{ github.workspace }}/.devkeys/jwks.json
+          OIDC_ISSUER: zara-devtoken
+          OIDC_AUDIENCE: zara-mgmt
+          PORT: "8401"
+        run: |
+          node dist/server.js &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8401/healthz >/dev/null && break
+            [ "$i" = 30 ] && { echo "mgmt did not come up"; exit 1; }
+            sleep 1
+          done
+      - name: npm ci + build web
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('web/package-lock.json') }}
+      - name: Playwright e2e
+        working-directory: web
+        env:
+          # Web runtime env lives here (not job-level) so mgmt never sees
+          # a foreign OIDC_JWKS_URL — playwright's webServer spawns
+          # `next start` and inherits this env.
+          API_URL: http://localhost:8401
+          SESSION_SECRET: e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          OIDC_AUTHORIZE_URL: http://localhost:5656/dex/auth
+          OIDC_TOKEN_URL: http://localhost:5656/dex/token
+          OIDC_JWKS_URL: http://localhost:5656/dex/keys
+          OIDC_CLIENT_ID: zara-web
+          OIDC_REDIRECT_URI: http://localhost:3400/auth/callback
+          ZARA_DEV_KEY_FILE: ${{ github.workspace }}/.devkeys/dev.pem
+          ZARA_TOKEN_ISSUER: zara-devtoken
+          ZARA_TOKEN_AUDIENCE: zara-mgmt
+          DEV_TENANT_ID: aa5ce000-0000-4000-8000-0000000000ac
+          DEV_ENVS: dev,qa,uat,prod
+          DEV_CLAIMS_MAP: '{"engineer@zara.dev":{"envs":["dev","qa","uat"]},"auditor@zara.dev":{"envs":["qa","uat"]}}'
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 7
+
   deps:
     name: Deps — cargo audit + filtered npm audit
     runs-on: ubuntu-latest

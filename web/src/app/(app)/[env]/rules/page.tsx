@@ -4,7 +4,7 @@ import { ApiError, mgmt, type Env } from '@/lib/api';
 import RulesTable from '@/components/RulesTable';
 import ErrorPanel from '@/components/ErrorPanel';
 import NewRuleButton from '@/components/NewRuleButton';
-import { canWriteEnv } from '@/lib/gate';
+import { canWriteEnv, promoteTargetFor } from '@/lib/gate';
 import { notFound } from 'next/navigation';
 
 export const metadata = { title: 'Rules — Zara' };
@@ -38,7 +38,12 @@ export default async function RulesPage({ params }: { params: Promise<{ env: str
         Fee artifacts in {env.toUpperCase()} — drafts are editable in DEV only;
         published rows are immutable.
       </Typography>
-      <RulesTable env={env as Env} rules={rules} canWrite={canWrite} />
+      <RulesTable
+        env={env as Env}
+        rules={rules}
+        canWrite={canWrite}
+        promoteTarget={promoteTargetFor(who, env as Env)}
+      />
     </Box>
   );
 }
