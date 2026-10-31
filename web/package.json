@@ -9,11 +9,13 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "audit:gate": "node scripts/audit.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@gorules/jdm-editor": "^1.52.0",
     "@mui/icons-material": "^6.4.0",
     "@mui/material": "^6.4.0",
     "@mui/material-nextjs": "^6.4.0",
@@ -28,6 +30,8 @@
     "postcss": "^8.5.31"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24.10.1",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
@@ -36,6 +40,7 @@
     "@vitest/coverage-v8": "^5.0.5",
     "eslint": "^9.39.1",
     "eslint-config-next": "^15.1.6",
+    "jsdom": "^29.1.1",
     "typescript": "^5.9.3",
     "vitest": "^5.0.5"
   }

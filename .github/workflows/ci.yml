@@ -309,12 +309,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: mgmt/package-lock.json
+          cache-dependency-path: |
+            mgmt/package-lock.json
+            web/package-lock.json
       - name: npm ci (mgmt)
         working-directory: mgmt
         run: npm ci
       - name: Filtered npm audit gate (MPE-123 pattern)
         working-directory: mgmt
+        run: npm run audit:gate
+      - name: npm ci (web)
+        working-directory: web
+        run: npm ci
+      - name: Filtered npm audit gate — web (MPE-123 pattern)
+        working-directory: web
         run: npm run audit:gate
 
   # Z2 added: rust job (fmt / clippy / test) + db job (migrate, isolation,
