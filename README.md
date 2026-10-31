@@ -31,6 +31,7 @@ demo seeds) provisions via `docker compose --profile setup up -d`
 | [docs/data-plane.md](docs/data-plane.md) | Z1 runbook — schemas, roles, RLS, seeds |
 | [docs/engine.md](docs/engine.md) | Z2 service guide — endpoints, claims, dev tokens, bench |
 | [docs/mgmt.md](docs/mgmt.md) | Z3 service guide — RBAC, grants admin, audit chain, secrets/KMS, masking |
+| [docs/web.md](docs/web.md) | Z5 console guide — PKCE session, dev token exchange, BFF, env gating |
 | [docs/fee-model.md](docs/fee-model.md) | Fee rule model — base_fee + adjustment_set |
 | [AGENTS.md](AGENTS.md) | Workflow, invariants, verification rules |
 

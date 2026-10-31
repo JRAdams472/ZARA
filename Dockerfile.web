@@ -1,0 +1,26 @@
+# zara-web image — the management console (:3400). Next.js App Router;
+# `output: 'standalone'` keeps the runtime image to the server bundle only.
+FROM node:24-bookworm-slim AS deps
+WORKDIR /app
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY web .
+# Build needs no secrets — session/OIDC config is all runtime env.
+RUN npm run build
+
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production
+WORKDIR /app
+RUN groupadd -r zara && useradd -r -g zara zara
+# standalone output carries its own minimal node_modules + server.js.
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+USER zara
+EXPOSE 3400
+ENV PORT=3400 HOSTNAME=0.0.0.0
+ENTRYPOINT ["node", "server.js"]

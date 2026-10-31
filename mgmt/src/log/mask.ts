@@ -50,13 +50,25 @@ function isDenied(key: string): boolean {
 
 /** Deep-clone `value` with denied keys rewritten to `[MASKED]`.
  *  Objects and arrays are walked recursively; scalars pass through.
- *  Matching is on the KEY name — a denied key's whole subtree is masked. */
+ *  Matching is on the KEY name — a denied key's whole subtree is masked.
+ *  Cycles collapse to '[Circular]' — this walker runs on EVERY log line,
+ *  so a cyclic structure must never crash the process. */
 export function maskDeep(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(maskDeep);
+  return walk(value, new WeakSet());
+}
+
+function walk(value: unknown, seen: WeakSet<object>): unknown {
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+    return value.map((v) => walk(v, seen));
+  }
   if (value && typeof value === 'object') {
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
-      out[k] = isDenied(k) ? MASK : maskDeep(v);
+      out[k] = isDenied(k) ? MASK : walk(v, seen);
     }
     return out;
   }

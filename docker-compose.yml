@@ -127,7 +127,7 @@ services:
     # FORCE RLS still requires SET zara.tenant_id for env-schema DML.
     entrypoint: ["sh", "-c"]
     command:
-      - "psql postgres://zara_migrate@db:5432/zara -v ON_ERROR_STOP=1 -f /seed/001_demo_tenants.sql -f /seed/002_demo_fees.sql"
+      - "psql postgres://zara_migrate@db:5432/zara -v ON_ERROR_STOP=1 -f /seed/001_demo_tenants.sql -f /seed/002_demo_fees.sql -f /seed/003_demo_grants.sql"
     restart: "no"
 
   # --- Execution engine (Z2): eval API on :8400 --------------------------
@@ -208,6 +208,47 @@ services:
       ENGINE_GRPC_ADDR: engine:9443
       ENGINE_GRPC_PROTO: /app/proto/zara/engine/v1/engine.proto
       ENGINE_GRPC_TOKEN_FILE: /run/devkeys/grpc-svc.jwt
+    restart: unless-stopped
+
+  # --- Management console (Z5): Next.js BFF on :3400 ---------------------
+  # Auth-code+PKCE through dex (public client zara-web). Dex proves the
+  # human's identity but cannot inject Zara claims, so the BFF mints a
+  # short-lived zara-devtoken bearer per request with the shared dev key —
+  # the same contract as mgmt/scripts/devtoken.mjs. Prod repoints the OIDC
+  # URLs at the real IdP (claims injected natively) and drops
+  # ZARA_DEV_KEY_FILE → passthrough, no code change.
+  web:
+    profiles: ["web"]
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    depends_on:
+      mgmt:
+        condition: service_started
+        required: false
+      dex:
+        condition: service_started
+    ports:
+      - "3400:3400"
+    volumes:
+      - ./.devkeys:/run/devkeys:ro
+    environment:
+      PORT: "3400"
+      API_URL: http://mgmt:8401
+      SESSION_SECRET: ${WEB_SESSION_SECRET:?set WEB_SESSION_SECRET in .env}
+      # Browser-facing authorize vs server-side token exchange — the
+      # browser reaches dex on localhost:5656, the container on dex:5556.
+      OIDC_AUTHORIZE_URL: http://localhost:5656/dex/auth
+      OIDC_TOKEN_URL: http://dex:5556/dex/token
+      OIDC_CLIENT_ID: zara-web
+      OIDC_REDIRECT_URI: http://localhost:3400/auth/callback
+      # Dev token exchange (see header). Claims defaults cover every dex
+      # user on the ACME demo tenant; per-user env scope narrows further.
+      ZARA_DEV_KEY_FILE: /run/devkeys/dev.pem
+      ZARA_TOKEN_AUDIENCE: zara-mgmt
+      DEV_TENANT_ID: aa5ce000-0000-4000-8000-0000000000ac
+      DEV_ENVS: dev,qa,uat,prod
+      DEV_CLAIMS_MAP: '{"auditor@zara.dev":{"envs":["qa","uat"]},"engineer@zara.dev":{"envs":["dev","qa","uat"]}}'
     restart: unless-stopped
 
 volumes:
