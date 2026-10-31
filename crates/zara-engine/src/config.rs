@@ -24,6 +24,13 @@ pub struct Config {
     /// Background fingerprint re-probe interval (ADR-0004 self-heal until
     /// Z4's gRPC publish lands).
     pub snapshot_poll_ms: u64,
+    /// gRPC EngineControl listener port (ADR-0004). JWT-verified service
+    /// calls; the HTTP eval surface is unchanged by this channel.
+    pub grpc_port: u16,
+    /// PEM cert/key for gRPC TLS 1.3. Both unset → h2c (dev carve-out,
+    /// same shape as OpenBao tls_disable — auth still verified).
+    pub grpc_tls_cert: Option<String>,
+    pub grpc_tls_key: Option<String>,
 }
 
 impl Config {
@@ -66,6 +73,9 @@ impl Config {
             oidc_jwks_url: std::env::var("OIDC_JWKS_URL").ok(),
             static_jwks,
             snapshot_poll_ms: env_parse("SNAPSHOT_POLL_MS", 30_000)?,
+            grpc_port: env_parse("GRPC_PORT", 9443)?,
+            grpc_tls_cert: std::env::var("GRPC_TLS_CERT").ok(),
+            grpc_tls_key: std::env::var("GRPC_TLS_KEY").ok(),
         })
     }
 }

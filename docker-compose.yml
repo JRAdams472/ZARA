@@ -149,10 +149,13 @@ services:
         required: false # also startable without the setup profile
     ports:
       - "8400:8400"
+      - "9443:9443" # gRPC EngineControl (ADR-0004); h2c in dev
     volumes:
       - ./.devkeys:/run/devkeys:ro
     environment:
       PORT: "8400"
+      GRPC_PORT: "9443"
+      # GRPC_TLS_CERT / GRPC_TLS_KEY (set together) flip the listener to TLS 1.3.
       ENGINE_DATABASE_URL: postgres://zara_engine:${ZARA_ENGINE_PASSWORD:?}@db:5432/zara
       ZARA_JWKS_FILE: /run/devkeys/jwks.json
       OIDC_ISSUER: ${ZARA_DEV_ISSUER:-zara-devtoken}
@@ -197,6 +200,14 @@ services:
       OIDC_AUDIENCE: ${ZARA_MGMT_AUDIENCE:-zara-mgmt}
       KMS_URL: http://openbao:8200
       KMS_TOKEN_FILE: /run/openbao/api-token
+      # ADR-0004 publish push → engine:9443. Unset → published:false and
+      # the engine poller converges. Service JWT (aud=zara-engine, tenant
+      # + env claims) — mint per-tenant for dev with the shared dev key:
+      #   node mgmt/scripts/devtoken.mjs --tenant-id <uuid> --envs dev,qa,uat,prod \
+      #     --aud zara-engine --key-in .devkeys/dev.pem > .devkeys/grpc-svc.jwt
+      ENGINE_GRPC_ADDR: engine:9443
+      ENGINE_GRPC_PROTO: /app/proto/zara/engine/v1/engine.proto
+      ENGINE_GRPC_TOKEN_FILE: /run/devkeys/grpc-svc.jwt
     restart: unless-stopped
 
 volumes:

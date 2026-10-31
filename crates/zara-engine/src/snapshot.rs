@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use sqlx::PgPool;
 use uuid::Uuid;
 use zen_engine::loader::{CachedLoader, DynamicLoader, MemoryLoader};
@@ -85,9 +85,16 @@ impl SnapshotStore {
         let mem = MemoryLoader::default();
         let mut fees = Vec::with_capacity(rows.len());
         for row in &rows {
-            let content: DecisionContent = serde_json::from_value(row.jdm.clone())
-                .with_context(|| format!("artifact {}: invalid JDM", row.key))?;
-            mem.add(row.key.clone(), content);
+            // Isolate malformed artifacts: keep the FeeMeta (eval records a
+            // line-level error for the key) but never let one bad row kill
+            // the whole partition's snapshot — same containment rule as
+            // eval's per-line errors.
+            match serde_json::from_value::<DecisionContent>(row.jdm.clone()) {
+                Ok(content) => mem.add(row.key.clone(), content),
+                Err(e) => {
+                    tracing::warn!(artifact = %row.key, error = %e, "skipping invalid published JDM")
+                }
+            }
             fees.push(FeeMeta {
                 key: row.key.clone(),
                 kind: match row.kind.as_str() {

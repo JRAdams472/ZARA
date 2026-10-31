@@ -13,6 +13,7 @@ pub mod auth;
 pub mod config;
 pub mod error;
 pub mod eval;
+pub mod grpc;
 pub mod limits;
 pub mod loader;
 pub mod pii_guard;

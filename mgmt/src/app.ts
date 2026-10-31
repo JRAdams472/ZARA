@@ -15,6 +15,7 @@ import { registerAudit } from './routes/audit.js';
 import { registerSecrets } from './routes/secrets.js';
 import { registerRules } from './routes/rules.js';
 import { registerPromote } from './routes/promote.js';
+import type { EnginePublisher } from './grpc/publish.js';
 import { LOG_FORMATTERS, LOG_REDACT } from './log/redact.js';
 
 export interface AppDeps {
@@ -26,6 +27,9 @@ export interface AppDeps {
   rulesSql?: postgres.Sql;
   /** `zara_promote` pool — unset → rule reads/promotes 503. */
   promoteSql?: postgres.Sql;
+  /** EngineControl gRPC client (ADR-0004) — unset → promote reports
+   *  published:false and the engine poller converges. */
+  enginePublisher?: EnginePublisher;
 }
 
 export async function buildApp(cfg: Config, deps: AppDeps): Promise<FastifyInstance> {
@@ -69,6 +73,6 @@ export async function buildApp(cfg: Config, deps: AppDeps): Promise<FastifyInsta
   registerAudit(app, deps.sql);
   registerSecrets(app, deps.sql, deps.cipher);
   registerRules(app, deps.rulesSql, deps.promoteSql, deps.sql);
-  registerPromote(app, deps.promoteSql, deps.sql);
+  registerPromote(app, deps.promoteSql, deps.sql, deps.enginePublisher);
   return app;
 }

@@ -7,7 +7,11 @@ Node.js/TypeScript management plane (JDM rule editor, RBAC gatekeeper,
 payloads in under 15 ms — over a shared PostgreSQL cluster with
 schema-per-environment isolation and row-level tenant security.
 
-**Status:** Z3 management plane complete — `zara-mgmt` (Fastify +
+**Status:** Z4 rule lifecycle + promotion shipped — dev JDM CRUD/publish
+and unskippable `DEV→QA→UAT→PROD` promotion on `zara_promote`, with a
+post-commit gRPC `PublishSnapshot` push that hot-reloads the engine
+cache without a restart (`:9443`, h2c+JWT dev / TLS 1.3 prod; poller
+self-heals on a missed push). Z3 management plane: `zara-mgmt` (Fastify +
 postgres.js) serves RBAC grants admin, env-scoped authorization, the
 per-tenant hash-chained audit trail, and OpenBao-sealed tenant secrets
 (`vault:v1:` envelopes, metadata-only API, RBAC-scoped serialization)

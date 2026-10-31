@@ -46,6 +46,7 @@ export interface Kit {
   /** Same validator/pool but no cipher — proves unset-KMS 503s. */
   noCipherApp: FastifyInstance;
   sql: postgres.Sql;
+  validator: JwtValidator;
   /** zara_app_dev / zara_promote pools — present when their DSNs are set. */
   rulesSql?: postgres.Sql;
   promoteSql?: postgres.Sql;
@@ -111,6 +112,7 @@ export async function makeKit(): Promise<Kit | undefined> {
     app,
     noCipherApp,
     sql,
+    validator,
     ...(rulesSql ? { rulesSql } : {}),
     ...(promoteSql ? { promoteSql } : {}),
     ...(cipher ? { cipher } : {}),

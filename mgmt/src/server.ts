@@ -2,6 +2,7 @@ import { loadConfig } from './config.js';
 import { JwtValidator } from './auth/jwks.js';
 import { createPool } from './db/pool.js';
 import { createCipher } from './kms/index.js';
+import { createEnginePublisher } from './grpc/publish.js';
 import { buildApp } from './app.js';
 
 const cfg = loadConfig();
@@ -32,6 +33,10 @@ const promoteSql = cfg.promoteDatabaseUrl ? createPool(cfg.promoteDatabaseUrl) :
 if (!rulesSql || !promoteSql) {
   console.warn('RULES_/PROMOTE_DATABASE_URL unset — rule + promotion routes will answer 503');
 }
+const enginePublisher = createEnginePublisher(cfg);
+if (!enginePublisher) {
+  console.warn('ENGINE_GRPC_ADDR unset — promotions report published:false (poller converges, ADR-0004)');
+}
 
 const app = await buildApp(cfg, {
   sql,
@@ -39,5 +44,6 @@ const app = await buildApp(cfg, {
   ...(cipher ? { cipher } : {}),
   ...(rulesSql ? { rulesSql } : {}),
   ...(promoteSql ? { promoteSql } : {}),
+  ...(enginePublisher ? { enginePublisher } : {}),
 });
 await app.listen({ port: cfg.port, host: '::' });
