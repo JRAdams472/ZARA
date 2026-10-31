@@ -13,6 +13,8 @@ WORKDIR /app
 RUN groupadd -r zara && useradd -r -g zara zara
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY proto ./proto
+ENV ENGINE_GRPC_PROTO=/app/proto/zara/engine/v1/engine.proto
 COPY mgmt/package.json ./
 USER zara
 EXPOSE 8401

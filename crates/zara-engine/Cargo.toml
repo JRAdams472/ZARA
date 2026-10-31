@@ -32,6 +32,8 @@ sqlx = { version = "0.8", features = [
 ] }
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+tonic = { version = "0.12", features = ["transport", "tls"] }
+prost = "0.13"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["trace"] }
 tracing = "0.1"
@@ -39,3 +41,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 zen-engine = "2"
 zen-expression = "2"
+
+[build-dependencies]
+tonic-build = "0.12"
+# Vendored protoc — keeps codegen self-contained (no system install on
+# dev machines or CI runners).
+protoc-bin-vendored = "3"

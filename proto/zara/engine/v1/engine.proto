@@ -1,0 +1,36 @@
+// Zara Node→Rust control contract (ADR-0004) — the contract of record.
+// The management plane calls PublishSnapshot after a promotion commits
+// so the engine's hot cache converges without a restart; the engine's
+// SNAPSHOT_POLL_MS self-heal remains the fallback when a push is missed.
+syntax = "proto3";
+package zara.engine.v1;
+
+service EngineControl {
+  // Push a newly-promoted snapshot: reload (env, tenant) from the
+  // published rule_artifacts rows and swap the hot cache entry.
+  rpc PublishSnapshot(PublishSnapshotRequest) returns (PublishSnapshotResponse);
+  // Introspection: what the cache currently holds for (env, tenant).
+  rpc SnapshotStatus(SnapshotStatusRequest) returns (SnapshotStatusResponse);
+}
+
+message PublishSnapshotRequest {
+  string tenant_id = 1;        // uuid — must match the caller JWT's tenant claim
+  string env = 2;              // dev|qa|uat|prod — must be in permitted_environments
+  string expected_sha256 = 3;  // promoted graph hash (audit hint; the store loads from the DB, which is truth)
+}
+
+message PublishSnapshotResponse {
+  string fingerprint = 1;      // applied snapshot fingerprint (count:max(updated_at))
+  int32 artifact_count = 2;    // published artifacts loaded into the snapshot
+}
+
+message SnapshotStatusRequest {
+  string tenant_id = 1;
+  string env = 2;
+}
+
+message SnapshotStatusResponse {
+  bool cached = 1;
+  string fingerprint = 2;
+  int32 artifact_count = 3;
+}

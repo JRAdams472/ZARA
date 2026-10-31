@@ -31,6 +31,7 @@ export const AUDIT_ACTIONS = {
   ruleDelete: 'rule.delete',
   rulePublish: 'rule.publish',
   promoteRule: 'promote.rule',
+  promotePublish: 'promote.publish',
 } as const;
 
 function canonicalize(v: unknown): string {

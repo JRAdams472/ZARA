@@ -24,6 +24,22 @@ export interface Config {
   /** `zara_promote` DSN — cross-schema SELECT+INSERT promotion path.
    *  Unset → rule reads + promote routes 503. */
   promoteDatabaseUrl?: string;
+  /** EngineControl gRPC hop (ADR-0004) — undefined when ENGINE_GRPC_ADDR
+   *  is unset; promote then reports published:false and the engine
+   *  poller converges instead. */
+  engineGrpc?: {
+    addr: string;
+    /** Inline service JWT (aud=zara-engine) — test/CI convenience. */
+    token?: string;
+    /** Mounted service-JWT file — the dev/prod path. */
+    tokenFile?: string;
+    /** Proto override (image layout); default is the repo contract. */
+    protoPath?: string;
+    /** ENGINE_GRPC_TLS set → TLS channel (prod); unset → h2c (dev). */
+    tls?: boolean;
+    /** CA root for TLS when the engine cert isn't publicly rooted. */
+    tlsCaFile?: string;
+  };
   /** KMS seam (ADR-0003) — undefined when KMS_URL is unset; secrets
    *  routes then answer 503. Never an insecure local fallback. */
   kms?: {
@@ -80,6 +96,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     rateLimitTrustXff: 'RATE_LIMIT_TRUST_XFF' in env,
     ...(env.RULES_DATABASE_URL ? { rulesDatabaseUrl: env.RULES_DATABASE_URL } : {}),
     ...(env.PROMOTE_DATABASE_URL ? { promoteDatabaseUrl: env.PROMOTE_DATABASE_URL } : {}),
+    ...(env.ENGINE_GRPC_ADDR
+      ? {
+          engineGrpc: {
+            addr: env.ENGINE_GRPC_ADDR,
+            ...(env.ENGINE_GRPC_TOKEN ? { token: env.ENGINE_GRPC_TOKEN } : {}),
+            ...(env.ENGINE_GRPC_TOKEN_FILE ? { tokenFile: env.ENGINE_GRPC_TOKEN_FILE } : {}),
+            ...(env.ENGINE_GRPC_PROTO ? { protoPath: env.ENGINE_GRPC_PROTO } : {}),
+            ...('ENGINE_GRPC_TLS' in env ? { tls: true } : {}),
+            ...(env.ENGINE_GRPC_TLS_CA_FILE ? { tlsCaFile: env.ENGINE_GRPC_TLS_CA_FILE } : {}),
+          },
+        }
+      : {}),
     ...(env.KMS_URL
       ? {
           kms: {

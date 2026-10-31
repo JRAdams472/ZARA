@@ -12,6 +12,7 @@ use sqlx::postgres::PgPoolOptions;
 use zara_engine::api::{router, AppState};
 use zara_engine::auth::JwtValidator;
 use zara_engine::config::Config;
+use zara_engine::grpc::EngineControlService;
 use zara_engine::limits::{edge_limit, EdgeLimits};
 use zara_engine::snapshot::SnapshotStore;
 
@@ -67,6 +68,37 @@ async fn main() -> Result<()> {
                 }
             }
         });
+    }
+
+    // gRPC EngineControl (ADR-0004): mgmt→engine snapshot publish + status.
+    // JWT-verified; h2c in dev, TLS 1.3 when GRPC_TLS_CERT/KEY are set.
+    {
+        let svc =
+            EngineControlService::server(pool.clone(), state.store.clone(), state.auth.clone());
+        let grpc_addr = ([0, 0, 0, 0], cfg.grpc_port).into();
+        let tls = match (&cfg.grpc_tls_cert, &cfg.grpc_tls_key) {
+            (Some(cert), Some(key)) => {
+                let identity = tonic::transport::Identity::from_pem(
+                    std::fs::read(cert).context("reading GRPC_TLS_CERT")?,
+                    std::fs::read(key).context("reading GRPC_TLS_KEY")?,
+                );
+                Some(tonic::transport::ServerTlsConfig::new().identity(identity))
+            }
+            (None, None) => None,
+            _ => anyhow::bail!("GRPC_TLS_CERT and GRPC_TLS_KEY must be set together"),
+        };
+        let tls_enabled = tls.is_some();
+        let mut builder = tonic::transport::Server::builder();
+        if let Some(t) = tls {
+            builder = builder.tls_config(t).context("gRPC TLS config")?;
+        }
+        let server = builder.add_service(svc);
+        tokio::spawn(async move {
+            if let Err(e) = server.serve(grpc_addr).await {
+                tracing::error!(error = %e, "gRPC EngineControl server failed");
+            }
+        });
+        tracing::info!(addr = %grpc_addr, tls = tls_enabled, "zara-engine gRPC listening");
     }
 
     let app = match EdgeLimits::from_env() {

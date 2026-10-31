@@ -12,6 +12,7 @@ import { listPromotionsTx, promoteArtifactTx } from '../db/promote.js';
 import { RULE_KEY_RE } from '../rules/jdm.js';
 import { badRequest, forbidden, HttpError, notFound } from '../plugins/errors.js';
 import { withTenantTx } from '../db/pool.js';
+import type { EnginePublisher } from '../grpc/publish.js';
 
 function needPool(sql: Sql | undefined): Sql {
   if (!sql) throw new HttpError(503, 'promotion store not configured');
@@ -22,6 +23,7 @@ export function registerPromote(
   app: FastifyInstance,
   promoteSql: Sql | undefined,
   auditSql: Sql,
+  publisher?: EnginePublisher,
 ): void {
   app.post('/api/envs/:env/rules/:key/promote', async (req) => {
     const { env: envParam, key } = req.params as { env: string; key: string };
@@ -71,7 +73,47 @@ export function registerPromote(
     } catch (e) {
       app.log.error({ err: e }, 'control audit write failed');
     }
-    return { key, fromEnv, toEnv, artifactId: result.artifactId, sha256: result.sha256 };
+    // ADR-0004: post-commit publish push — strictly best-effort. A failed
+    // or unconfigured hop reports published:false and the engine's
+    // SNAPSHOT_POLL_MS self-heal converges the cache instead.
+    let published = false;
+    let fingerprint: string | undefined;
+    let publishErr: string | undefined;
+    if (publisher) {
+      try {
+        const r = await publisher.publish(p.tenantId, toEnv, result.sha256);
+        published = true;
+        fingerprint = r.fingerprint;
+      } catch (e) {
+        publishErr = e instanceof Error ? e.name : 'publish failed';
+        app.log.warn({ err: e }, 'engine publish push failed — poller will converge');
+      }
+      try {
+        await withTenantTx(auditSql, p.tenantId, (tx) =>
+          record(tx, p, {
+            action: AUDIT_ACTIONS.promotePublish,
+            detail: {
+              key,
+              env: toEnv,
+              ok: published,
+              ...(fingerprint ? { fingerprint } : {}),
+              ...(publishErr ? { reason: publishErr } : {}),
+            },
+          }),
+        );
+      } catch (e) {
+        app.log.error({ err: e }, 'promote.publish audit write failed');
+      }
+    }
+    return {
+      key,
+      fromEnv,
+      toEnv,
+      artifactId: result.artifactId,
+      sha256: result.sha256,
+      published,
+      ...(fingerprint ? { fingerprint } : {}),
+    };
   });
 
   app.get('/api/envs/:env/promotions', async (req) => {

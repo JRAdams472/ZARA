@@ -79,7 +79,9 @@ uses `zara-devtoken`.
 | `OIDC_AUDIENCE` | `zara-engine` | comma-separated |
 | `OIDC_JWKS_URL` | discovery | explicit endpoint beats OIDC discovery |
 | `ZARA_JWKS_JSON` / `ZARA_JWKS_FILE` | — | **dev/test only**: static JWKS, no refresh |
-| `SNAPSHOT_POLL_MS` | `30000` | background fingerprint re-probe — self-heal per ADR-0004 until Z4's gRPC publish |
+| `SNAPSHOT_POLL_MS` | `30000` | background fingerprint re-probe — the ADR-0004 self-heal fallback when a publish push is missed/failed |
+| `GRPC_PORT` | `9443` | EngineControl gRPC listener (ADR-0004) |
+| `GRPC_TLS_CERT` + `GRPC_TLS_KEY` | — | set **together** → TLS 1.3 listener; unset → h2c (dev/CI carve-out) |
 | `RATE_LIMIT_PER_MIN` | `240` | per-IP token bucket (single tier — eval-only surface) |
 | `RATE_LIMIT_DISABLE` | — | limits off (test only) |
 | `RATE_LIMIT_TRUST_XFF` | — | honor `X-Forwarded-For` for the bucket key — only behind a proxy that overwrites it |
@@ -126,9 +128,30 @@ key across runs), `--kid`. It prints the token on stdout; the JWKS goes to
 `GET`-side reads resolve through `SnapshotStore` (`(env, tenant)` →
 compiled JDM behind zen `CachedLoader`): each request runs the cheap
 `count:max(updated_at)` fingerprint probe, so a publish invalidates the
-cached snapshot on the next call. The background poller additionally
-re-probes every `SNAPSHOT_POLL_MS` — the self-heal path pending Z4's gRPC
-`PublishSnapshot` push (ADR-0004).
+cached snapshot on the next call. Two convergence paths per ADR-0004:
+
+- **gRPC push** — `EngineControl.PublishSnapshot` on `:9443` re-resolves
+  the partition through the same `snapshot_for` path (fingerprint →
+  rebuild on change → swap). The management plane calls it post-commit
+  after a promotion; hot reload is proven by `tests/grpc.rs`.
+- **Poller self-heal** — every `SNAPSHOT_POLL_MS` the store re-probes all
+  cached partitions; a missed/failed push converges on the next tick.
+
+A malformed published artifact can never brick a partition: `build()`
+skips the row's loader entry but keeps its fee metadata, so eval records
+a line-level error for that key (same containment as eval's per-line
+errors) instead of failing the whole snapshot.
+
+### gRPC auth + transport
+
+Same claim contract as REST: `authorization` Bearer metadata verified by
+the shared `JwtValidator` (aud `zara-engine`); the token's `tenant_id`
+must equal the request's and `env` must be in `permitted_environments`
+— `UNAUTHENTICATED`/`PERMISSION_DENIED`/`INVALID_ARGUMENT` map the
+denial classes. Dev/CI runs h2c + verified JWT (the ADR-0004 carve-out);
+prod sets `GRPC_TLS_CERT`/`GRPC_TLS_KEY` for TLS 1.3. Contract of record:
+`proto/zara/engine/v1/engine.proto` (Rust stubs committed at
+`src/grpc/gen/`, rebuilt by `build.rs` via vendored `protoc`).
 
 Loader reads run **as `zara_engine`** (SELECT-only) with `zara.tenant_id`
 stamped per tenant in-transaction — FORCE RLS applies to the engine role;

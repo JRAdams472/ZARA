@@ -93,7 +93,7 @@ audit writes for unauthenticated traffic.
 | `PUT /api/envs/dev/rules/:key` | dev write | update the draft (published rows are immutable) |
 | `DELETE /api/envs/dev/rules/:key` | dev write | delete the draft |
 | `POST /api/envs/dev/rules/:key/publish` | dev write | draft → immutable published row |
-| `POST /api/envs/{env}/rules/:key/promote` | engineer→UAT, RM→PROD | copy published row into the successor env + history — **unskippable**: target is derived, `DEV→PROD` inexpressible |
+| `POST /api/envs/{env}/rules/:key/promote` | engineer→UAT, RM→PROD | copy published row into the successor env + history — **unskippable**: target is derived, `DEV→PROD` inexpressible. Response adds `published` — the ADR-0004 gRPC push outcome (best-effort) |
 | `GET /api/envs/{env}/promotions` | env-scoped | `promotion_history` tail (`?limit=`, ≤200) |
 
 Grant writes and their audit rows commit in the **same** tenant-scoped
@@ -121,6 +121,25 @@ Two additional DSNs, both optional → 503 when unset:
 The write-path PII guard (`rules/pii.ts`) rejects denylist keys and
 SSN/email-shaped values at authoring — the engine boundary's invariant
 applied upstream.
+
+### Publish push (Z4 Phase 2, ADR-0004)
+
+After the promotion transaction commits, the route pushes
+`EngineControl.PublishSnapshot` to the engine's gRPC listener
+(`src/grpc/publish.ts`, `@grpc/grpc-js` + runtime proto load from the
+`proto/` contract). **Strictly best-effort**: the response carries
+`published` (+ `fingerprint` on success); a failed or unconfigured hop
+returns `published:false`, logs a warning, and attests a
+`promote.publish` audit row — the promotion itself never rolls back,
+and the engine's `SNAPSHOT_POLL_MS` self-heal converges the snapshot.
+
+Hop auth is a service JWT (`aud=zara-engine`) carrying `tenant_id` +
+`permitted_environments`; the engine re-checks both against the request
+and the publish deadline is 5 s. Dev mints one per-tenant token with the
+shared `.devkeys` key (`devtoken.mjs --aud zara-engine` →
+`ENGINE_GRPC_TOKEN_FILE`); prod runs TLS 1.3 (`ENGINE_GRPC_TLS`,
+`_CA_FILE` for non-public roots) with per-tenant client-credentials —
+the follow-up tracked on the milestone.
 
 ## KMS seam + secrets (ADR-0003)
 
@@ -206,6 +225,10 @@ Least privilege, provisioned by `bootstrap/0004` +
 | `KMS_TOKEN_FILE` | scoped-token file (`data/openbao/api-token` via init) |
 | `KMS_TOKEN` | inline token alternative — test/CI convenience only |
 | `KMS_MOUNT` / `KMS_KEY_NAME` | transit mount + key (`zara-transit` / `zara-mgmt-secrets`) |
+| `ENGINE_GRPC_ADDR` | engine gRPC listener — unset → `published:false`, poller converges |
+| `ENGINE_GRPC_TOKEN_FILE` / `ENGINE_GRPC_TOKEN` | service JWT for the hop (aud `zara-engine`, tenant+env claims) |
+| `ENGINE_GRPC_PROTO` | proto path override (the image sets `/app/proto/...`) |
+| `ENGINE_GRPC_TLS` / `ENGINE_GRPC_TLS_CA_FILE` | TLS channel + CA root — prod; h2c default is the dev carve-out |
 
 ## Dev loop
 
