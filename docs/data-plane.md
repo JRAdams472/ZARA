@@ -4,7 +4,8 @@ The PostgreSQL data plane per ADR-0002: one cluster, a `zara_control`
 registry schema, and four environment schemas (`zara_dev`, `zara_qa`,
 `zara_uat`, `zara_prod`) with identical DDL. Every tenant-scoped table is
 protected by `FORCE ROW LEVEL SECURITY` keyed on the `zara.tenant_id`
-GUC — **no GUC means zero rows, even for the table owner**.
+GUC — **no GUC raises `zara.tenant_id is not set`** (the `tenant_guc()`
+guard, MPE-166 fail-loud) — even for the table owner.
 
 ## Roles
 
@@ -132,7 +133,7 @@ with the same env vars exported.
 |---|---|
 | t01 | Cross-tenant SELECT denied; wrong-tenant INSERT hits WITH CHECK |
 | t02 | `zara_app_<env>` cannot reach another env's schema |
-| t03 | Unset `zara.tenant_id` → zero rows (fail-closed) |
+| t03 | Unset `zara.tenant_id` → fail-loud raise (`tenant_guc`) |
 | t04 | `promotion_history`/`audit_events` append-only; published artifacts immutable |
 | t05 | Identical DDL + `_sqlx_migrations` ledgers across all four env schemas |
 | t06 | `FORCE RLS` binds even the table owner |

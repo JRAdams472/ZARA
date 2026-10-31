@@ -52,9 +52,9 @@ q=$(psql_as zara_app_qa ZARA_APP_QA_PASSWORD \
         SELECT count(*) FROM zara_qa.rule_artifacts WHERE status='draft';" | scalar)
 [[ $q == "0" ]] || { echo "FAIL: expected 0 drafts outside dev, got '$q'" >&2; exit 1; }
 
-# No GUC at all → seeded data is still unreachable.
-none=$(psql_as zara_app_dev ZARA_APP_DEV_PASSWORD \
-    -c "SELECT count(*) FROM zara_dev.rule_artifacts;" | scalar)
-[[ $none == "0" ]] || { echo "FAIL: no-GUC saw '$none' seeded rows" >&2; exit 1; }
+# No GUC at all → fail-loud raise; seeded data is unreachable (MPE-166).
+expect_fail zara_app_dev ZARA_APP_DEV_PASSWORD \
+    "zara.tenant_id is not set" \
+    -c "SELECT count(*) FROM zara_dev.rule_artifacts;"
 
 echo "t07 OK"
