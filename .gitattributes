@@ -6,3 +6,10 @@
 *.yml  text eol=lf
 *.yaml text eol=lf
 *.proto text eol=lf
+
+# Vendored skill tooling copied in for agent use — not authored Zara source.
+# Excludes it from Linguist stats and collapses it in diffs. Authored skills
+# (milestone-planning, wiki-screenshots) intentionally stay normal.
+/.devin/skills/impeccable/**            linguist-vendored
+/.devin/skills/design-taste-frontend/** linguist-vendored
+/.devin/skills/humanizer/**             linguist-vendored
