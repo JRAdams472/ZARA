@@ -50,6 +50,10 @@ export interface Kit {
   /** zara_app_dev / zara_promote pools — present when their DSNs are set. */
   rulesSql?: postgres.Sql;
   promoteSql?: postgres.Sql;
+  /** zara_migrate pool — present when MIGRATE_DATABASE_URL is set. Needed
+   *  ONLY for test-artifact cleanup: it owns the env tables, so it can
+   *  toggle the immutable-published trigger. */
+  migrateSql?: postgres.Sql;
   /** Present when KMS_URL was set at kit build — cipher-backed tests gate on it. */
   cipher?: FieldCipher;
   mint: (opts: MintOpts) => Promise<string>;
@@ -80,6 +84,9 @@ export async function makeKit(): Promise<Kit | undefined> {
   const cipher = createCipher(TEST_CONFIG);
   const rulesSql = TEST_CONFIG.rulesDatabaseUrl ? postgres(TEST_CONFIG.rulesDatabaseUrl, { max: 4 }) : undefined;
   const promoteSql = TEST_CONFIG.promoteDatabaseUrl ? postgres(TEST_CONFIG.promoteDatabaseUrl, { max: 4 }) : undefined;
+  const migrateSql = process.env.MIGRATE_DATABASE_URL
+    ? postgres(process.env.MIGRATE_DATABASE_URL, { max: 2 })
+    : undefined;
   const app = await buildApp(TEST_CONFIG, {
     sql,
     validator,
@@ -115,7 +122,40 @@ export async function makeKit(): Promise<Kit | undefined> {
     validator,
     ...(rulesSql ? { rulesSql } : {}),
     ...(promoteSql ? { promoteSql } : {}),
+    ...(migrateSql ? { migrateSql } : {}),
     ...(cipher ? { cipher } : {}),
     mint,
   };
+}
+
+/**
+ * Delete published test artifacts — the immutable trigger forbids the
+ * DELETE outright, so cleanup toggles it in-tx (allowed only because
+ * `zara_migrate` OWNS the env tables; no lesser role can do this).
+ * Key-scoped per test file: suites run in parallel, so a broad sweep
+ * would race. Call from afterAll with the file's own keys.
+ */
+export async function cleanTestArtifacts(
+  migrate: postgres.Sql,
+  tenantId: string,
+  keys: string[],
+): Promise<void> {
+  for (const schema of ['zara_dev', 'zara_qa', 'zara_uat', 'zara_prod']) {
+    await migrate.begin(async (tx) => {
+      // GUC must be set before ANY RLS-touched statement — a bare query
+      // on a pooled connection hits the ''-placeholder and errors on
+      // ''::uuid rather than returning zero rows.
+      await tx`SELECT set_config('zara.tenant_id', ${tenantId}, true)`;
+      await tx.unsafe(
+        `ALTER TABLE ${schema}.rule_artifacts DISABLE TRIGGER rule_artifacts_immutable_published`,
+      );
+      await tx.unsafe(
+        `DELETE FROM ${schema}.rule_artifacts WHERE key = ANY($1)`,
+        [keys],
+      );
+      await tx.unsafe(
+        `ALTER TABLE ${schema}.rule_artifacts ENABLE TRIGGER rule_artifacts_immutable_published`,
+      );
+    });
+  }
 }
