@@ -19,6 +19,14 @@ beforeAll(async () => {
       (tenant_id, subject_type, subject, role, granted_by)
     VALUES (${ACME}::uuid, 'sub', 'rm-subject', 'tenant_release_manager', 'testkit')
     ON CONFLICT DO NOTHING`);
+  // And one dedicated RM grant on NORTHSTAR — the last-RM guard test runs
+  // there so its "delete extras" step can never evict ACME's shared
+  // rm-subject grant out from under concurrent test files.
+  await withTenantTx(kit.sql, NORTHSTAR, (tx) => tx`
+    INSERT INTO zara_control.role_grants
+      (tenant_id, subject_type, subject, role, granted_by)
+    VALUES (${NORTHSTAR}::uuid, 'sub', 'ns-rm-subject', 'tenant_release_manager', 'testkit')
+    ON CONFLICT DO NOTHING`);
 });
 
 afterAll(async () => {
@@ -135,7 +143,9 @@ describe('grants admin', () => {
 
   it('refuses to revoke the tenant\'s last release manager', async () => {
     if (!kit) return;
-    const t = await rmToken();
+    // Runs against NORTHSTAR — deleting ACME RM extras here would race the
+    // other suites that hold rm-subject tokens.
+    const t = await kit.mint({ sub: 'ns-rm-subject', tenantId: NORTHSTAR, envs: ['dev', 'qa', 'uat', 'prod'] });
     const list = await get('/api/admin/grants', t);
     const rms = list.json().grants.filter((g: { role: string }) => g.role === 'tenant_release_manager');
     // Delete extras first so exactly one remains.
