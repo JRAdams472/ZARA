@@ -106,7 +106,7 @@ jobs:
       - name: Apply demo seeds
         # Same files/command as the compose `seed` service so CI and the
         # dev stack stay identical; makes t07 verify (not skip).
-        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql
       - name: Isolation suite
         run: bash tests/isolation/run.sh
       - name: Engine loader test (zara_engine role + RLS)
@@ -152,7 +152,7 @@ jobs:
       - name: Apply migrations (bootstrap + control + env ×4)
         run: cargo run -p zara-migrate -- --set-role-passwords
       - name: Apply demo seeds
-        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql
       - name: Service integration tests (JWT gate, PII, seeded eval)
         run: cargo test -p zara-engine
       - name: HTTP eval bench (p95 < 15 ms)
@@ -215,7 +215,7 @@ jobs:
       - name: Apply migrations (bootstrap + control + env ×4)
         run: cargo run -p zara-migrate -- --set-role-passwords
       - name: Apply demo seeds
-        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql
       - name: Provision transit mount + scoped token (dev OpenBao)
         run: |
           set -euo pipefail
@@ -261,6 +261,35 @@ jobs:
           npm run coverage:check
       - name: Build
         working-directory: mgmt
+        run: npm run build
+
+  web:
+    name: Web — npm gates (lint / typecheck / test / build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+      - name: Route types (next typegen → next-env.d.ts)
+        working-directory: web
+        run: npx next typegen
+      - name: Lint
+        working-directory: web
+        run: npm run lint
+      - name: Typecheck
+        working-directory: web
+        run: npm run typecheck
+      - name: Unit tests (vitest)
+        working-directory: web
+        run: npm test
+      - name: Build
+        working-directory: web
         run: npm run build
 
   deps:

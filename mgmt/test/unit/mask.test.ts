@@ -63,6 +63,20 @@ describe('maskDeep', () => {
     expect(maskDeep(null)).toBe(null);
   });
 
+  it('collapses cycles instead of recursing forever', () => {
+    // Regression: the log formatter runs this on every log object — a
+    // cyclic structure (req/res/err shapes) used to crash the process.
+    const a: Record<string, unknown> = { name: 'a' };
+    const b: Record<string, unknown> = { name: 'b', back: a };
+    a.back = b;
+    const out = maskDeep({ req: a, token: 'x' }) as {
+      req: { back: { back: string } };
+      token: string;
+    };
+    expect(out.req.back.back).toBe('[Circular]');
+    expect(out.token).toBe(MASK);
+  });
+
   it('denylist is versioned', () => {
     expect(MASK_DENYLIST_VERSION).toBeGreaterThanOrEqual(1);
   });
