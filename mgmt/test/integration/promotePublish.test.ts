@@ -9,7 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import type { EnginePublisher, PublishResult } from '../../src/grpc/publish.js';
 import { withTenantTx } from '../../src/db/pool.js';
-import { ACME, makeKit, TEST_CONFIG, type Kit } from '../kit.js';
+import { ACME, cleanTestArtifacts, makeKit, TEST_CONFIG, type Kit } from '../kit.js';
 
 let kit: Kit | undefined;
 let stubApp: FastifyInstance | undefined;
@@ -61,6 +61,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (kit?.migrateSql) await cleanTestArtifacts(kit.migrateSql, ACME, [KEY]);
   await stubApp?.close();
   await downApp?.close();
   await kit?.app.close();
@@ -68,6 +69,7 @@ afterAll(async () => {
   await kit?.sql.end();
   await kit?.rulesSql?.end();
   await kit?.promoteSql?.end();
+  await kit?.migrateSql?.end();
 });
 
 describe('promotion publish push', () => {

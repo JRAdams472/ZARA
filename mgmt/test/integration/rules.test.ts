@@ -3,7 +3,7 @@
 //! RULES_/PROMOTE_ DSNs (CI provides them).
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ACME, makeKit, type Kit } from '../kit.js';
+import { ACME, cleanTestArtifacts, makeKit, type Kit } from '../kit.js';
 import { withTenantTx } from '../../src/db/pool.js';
 
 let kit: Kit | undefined;
@@ -38,11 +38,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (kit?.migrateSql) {
+    await cleanTestArtifacts(kit.migrateSql, ACME, [KEY, 'it-draft-only']);
+  }
   await kit?.app.close();
   await kit?.noCipherApp.close();
   await kit?.sql.end();
   await kit?.rulesSql?.end();
   await kit?.promoteSql?.end();
+  await kit?.migrateSql?.end();
 });
 
 const call = (method: string, url: string, token?: string, body?: unknown) =>
