@@ -27,7 +27,7 @@ beforeEach(() => {
   vi.unstubAllEnvs();
 });
 
-function stubUpstream(status = 200, body = { ok: true }) {
+function stubUpstream(status = 200, body: unknown = { ok: true }) {
   const spy = vi.fn(
     async () =>
       new Response(JSON.stringify(body), {
@@ -61,7 +61,7 @@ describe('bff proxy', () => {
       ctx(['api', 'envs', 'dev', 'rules']),
     );
     expect(res.status).toBe(200);
-    const [url, init] = spy.mock.calls[0]! as [string, RequestInit];
+    const [url, init] = spy.mock.calls[0]! as unknown as [string, RequestInit];
     expect(url).toBe('http://mgmt.test/api/envs/dev/rules?limit=5');
     expect((init.headers as Headers).get('authorization')).toBe('Bearer idp-token');
     expect(await res.json()).toEqual({ rules: [] });
@@ -82,7 +82,7 @@ describe('bff proxy', () => {
     });
     const spy = stubUpstream();
     await route.GET(req('http://localhost:3400/bff/api/whoami'), ctx(['api', 'whoami']));
-    const [, init] = spy.mock.calls[0]! as [string, RequestInit];
+    const [, init] = spy.mock.calls[0]! as unknown as [string, RequestInit];
     const bearer = (init.headers as Headers).get('authorization')!;
     expect(bearer.startsWith('Bearer eyJ')).toBe(true); // JWT, not 'idp-token'
     expect(bearer).not.toContain('idp-token');

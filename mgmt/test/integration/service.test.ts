@@ -170,8 +170,12 @@ describe('rls + append-only', () => {
 
   it('northstar sees no acme grants through the same role', async () => {
     if (!kit) return;
+    // RLS scopes northstar to its own partition, so the assertion must name
+    // acme's rows — count(*) alone would also count legitimate northstar
+    // seed grants (003_demo_grants.sql).
     const rows = await withTenantTx(kit.sql, NORTHSTAR, (tx) => tx`
-      SELECT count(*)::int AS n FROM zara_control.role_grants`);
+      SELECT count(*)::int AS n FROM zara_control.role_grants
+      WHERE tenant_id = ${ACME}`);
     expect(rows[0]!.n).toBe(0);
   });
 
