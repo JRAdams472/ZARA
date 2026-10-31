@@ -11,6 +11,7 @@ import { AUDIT_ACTIONS, record } from '../db/audit.js';
 import {
   createDraftTx,
   deleteDraftTx,
+  draftExistsTx,
   getArtifactTx,
   listArtifactsTx,
   publishDraftTx,
@@ -19,7 +20,7 @@ import {
 } from '../db/rules.js';
 import { assertJdmShape, canonicalize, isRuleKind, RULE_KEY_RE } from '../rules/jdm.js';
 import { assertNoPii } from '../rules/pii.js';
-import { badRequest, forbidden, HttpError, notFound } from '../plugins/errors.js';
+import { badRequest, conflict, forbidden, HttpError, notFound } from '../plugins/errors.js';
 import { withTenantTx } from '../db/pool.js';
 
 const writeSchema = {
@@ -89,6 +90,9 @@ export function registerRules(
     const key = body.key;
     const kind = body.kind;
     await withTenantTx(needPool(rulesSql), p.tenantId, async (tx) => {
+      // One draft per (tenant,key) — a live draft means continue editing
+      // it; a published-only key is the "new draft from published" path.
+      if (await draftExistsTx(tx, key)) throw conflict('a draft with this key already exists');
       await createDraftTx(tx, { key, kind, spec: body.spec, jdm, createdBy: p.sub });
       await record(tx, p, { action: AUDIT_ACTIONS.ruleCreate, detail: { key: body.key, kind: body.kind } }, 'zara_dev');
     });

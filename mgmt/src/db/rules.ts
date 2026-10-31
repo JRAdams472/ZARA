@@ -56,10 +56,13 @@ export async function listArtifactsTx(tx: TxSql, env: Env): Promise<ArtifactMeta
   return rows.map(toMeta);
 }
 
+/** Single-key fetch prefers the mutable working copy: publish keeps the
+ *  draft alive, so a draft row wins over published revisions (sibling
+ *  convention — editors open the working copy, not the snapshot). */
 export async function getArtifactTx(tx: TxSql, env: Env, key: string): Promise<Artifact | undefined> {
   const rows = await tx<(RawRow & { spec: unknown; jdm: unknown })[]>`
     SELECT ${tx.unsafe(META_COLS)}, spec, jdm FROM ${tbl(tx, env)}
-     WHERE key = ${key} ORDER BY status DESC, published_at DESC NULLS FIRST LIMIT 1`;
+     WHERE key = ${key} ORDER BY status ASC, published_at DESC NULLS LAST LIMIT 1`;
   const r = rows[0];
   return r ? { ...toMeta(r), spec: r.spec, jdm: r.jdm } : undefined;
 }
@@ -83,6 +86,12 @@ export async function createDraftTx(
 export type WriteResult =
   | { ok: true }
   | { ok: false; reason: 'not_found' | 'published' };
+
+/** True when a live draft row exists for (tenant,key). */
+export async function draftExistsTx(tx: TxSql, key: string): Promise<boolean> {
+  const rows = await tx`SELECT 1 FROM ${tbl(tx, 'dev')} WHERE key = ${key} AND status = 'draft' LIMIT 1`;
+  return rows.length > 0;
+}
 
 async function draftOrPublished(tx: TxSql, key: string): Promise<WriteResult | undefined> {
   const draft = await tx`SELECT 1 FROM ${tbl(tx, 'dev')} WHERE key = ${key} AND status = 'draft' LIMIT 1`;

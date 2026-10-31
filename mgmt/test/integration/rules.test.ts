@@ -39,7 +39,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (kit?.migrateSql) {
-    await cleanTestArtifacts(kit.migrateSql, ACME, [KEY, 'it-draft-only']);
+    await cleanTestArtifacts(kit.migrateSql, ACME, [KEY, 'it-draft-only', 'it-detail-key']);
   }
   await kit?.app.close();
   await kit?.noCipherApp.close();
@@ -97,6 +97,32 @@ describe('rule lifecycle (DSN-gated)', () => {
     const draft = 'it-draft-only';
     await call('POST', '/api/envs/dev/rules', t, { key: draft, kind: 'adjustment_set', spec: JDM });
     expect((await call('DELETE', `/api/envs/dev/rules/${draft}`, t)).statusCode).toBe(200);
+  });
+
+  it('detail prefers the draft working copy; duplicate draft create is 409', async () => {
+    if (!live()) return;
+    const t = await eng();
+    const key = 'it-detail-key';
+    expect((await call('POST', '/api/envs/dev/rules', t, { key, kind: 'base_fee', spec: JDM })).statusCode).toBe(201);
+    // A live draft makes re-POST of the same key a conflict, not a PG violation.
+    const dup = await call('POST', '/api/envs/dev/rules', t, { key, kind: 'base_fee', spec: JDM });
+    expect(dup.statusCode).toBe(409);
+    // Publishing keeps the draft — detail must keep returning the working copy.
+    expect((await call('POST', `/api/envs/dev/rules/${key}/publish`, t)).statusCode).toBe(200);
+    const detail = await call('GET', `/api/envs/dev/rules/${key}`, t);
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json<{ rule: { status: string } }>().rule.status).toBe('draft');
+    // The list still surfaces both rows.
+    const list = await call('GET', '/api/envs/dev/rules', t);
+    const statuses = list
+      .json<{ rules: { key: string; status: string }[] }>()
+      .rules.filter((r) => r.key === key)
+      .map((r) => r.status)
+      .sort();
+    expect(statuses).toEqual(['draft', 'published']);
+    // And "new draft from published" works after the draft is removed.
+    expect((await call('DELETE', `/api/envs/dev/rules/${key}`, t)).statusCode).toBe(200);
+    expect((await call('POST', '/api/envs/dev/rules', t, { key, kind: 'base_fee', spec: JDM })).statusCode).toBe(201);
   });
 
   it('PII + bad shapes are 400; auditor is 403; mutations are dev-only', async () => {

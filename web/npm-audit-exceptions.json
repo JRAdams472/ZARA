@@ -1,0 +1,25 @@
+{
+  "exceptions": [
+    {
+      "id": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "severity": "high",
+      "reason": "Bundled client-side by @gorules/jdm-editor@1.52.0 (pinned to zod 3.x; fix requires >=4.6.6, a major bump outside its range). Memory-exhaustion is only reachable via editor-side schema validation in the user's own browser tab — mgmt re-validates every spec server-side (assertJdmShape + assertNoPii), so no server exposure. Revisit on the next jdm-editor release.",
+      "added": "MPE-170"
+    },
+    {
+      "id": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "severity": "moderate",
+      "reason": "ReDoS in glob@7 chain under exceljs (xlsx import/export inside the jdm-editor). Only reachable when a user imports a crafted spreadsheet into their own browser session; no server path exists. exceljs has no fixed release as of 2026-10.",
+      "added": "MPE-170"
+    },
+    {
+      "id": "GHSA-w5hq-g745-h8pq",
+      "package": "uuid",
+      "severity": "moderate",
+      "reason": "uuid@8 via exceljs (jdm-editor xlsx support); the missing bounds check requires a caller-supplied output buffer, which exceljs never passes. Client-side bundle only. Fix requires uuid>=11 — three majors outside exceljs's pinned range.",
+      "added": "MPE-170"
+    }
+  ]
+}

@@ -6,6 +6,8 @@ import { notFound } from 'next/navigation';
 import { ApiError, mgmt, type Env } from '@/lib/api';
 import StatusChip from '@/components/StatusChip';
 import ErrorPanel from '@/components/ErrorPanel';
+import RuleEditor from '@/components/RuleEditor';
+import { canWriteEnv } from '@/lib/gate';
 
 export const metadata = { title: 'Rule detail — Zara' };
 
@@ -15,7 +17,10 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
       <Typography variant="overline" color="text.secondary">
         {label}
       </Typography>
-      <Typography variant="body2" sx={mono ? { fontFamily: 'monospace', fontSize: 12 } : undefined}>
+      <Typography
+        variant="body2"
+        sx={mono ? { fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' } : undefined}
+      >
         {value}
       </Typography>
     </Box>
@@ -29,8 +34,10 @@ export default async function RuleDetailPage({
 }) {
   const { env, key } = await params;
   let rule;
+  let who;
   try {
     ({ rule } = await mgmt.rule(env as Env, key));
+    who = await mgmt.whoami();
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
@@ -49,7 +56,8 @@ export default async function RuleDetailPage({
         <Chip label={rule.kind} size="small" variant="outlined" />
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        {env.toUpperCase()} · read-only
+        {env.toUpperCase()} · {canWriteEnv(who, env as Env) ? 'write' : 'read-only'} access ·{' '}
+        {rule.status === 'draft' ? 'working copy' : 'immutable revision'}
       </Typography>
 
       <Paper variant="outlined" sx={{ p: 3, mb: 3, bgcolor: 'background.paper' }}>
@@ -66,26 +74,14 @@ export default async function RuleDetailPage({
       </Paper>
 
       <Typography variant="h6" gutterBottom>
-        Spec
+        Decision graph
       </Typography>
-      <Paper
-        variant="outlined"
-        component="pre"
-        sx={{ p: 2, mb: 3, bgcolor: 'background.paper', overflow: 'auto', fontSize: 12 }}
-      >
-        {JSON.stringify(rule.spec, null, 2)}
-      </Paper>
-
-      <Typography variant="h6" gutterBottom>
-        JDM graph
-      </Typography>
-      <Paper
-        variant="outlined"
-        component="pre"
-        sx={{ p: 2, bgcolor: 'background.paper', overflow: 'auto', fontSize: 12 }}
-      >
-        {JSON.stringify(rule.jdm, null, 2)}
-      </Paper>
+      <RuleEditor
+        env={env as Env}
+        ruleKey={rule.key}
+        initialRule={rule}
+        canWrite={canWriteEnv(who, env as Env)}
+      />
     </Box>
   );
 }
