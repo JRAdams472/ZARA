@@ -8,7 +8,16 @@ import 'server-only';
 import { cfg } from './config';
 import { bearerFor } from './bearer';
 import { isLive, readSession } from './session';
-import type { Env, PromotionRow, RuleDetail, RuleMeta, Whoami } from './types';
+import type {
+  AuditEvent,
+  AuditVerifyResult,
+  Env,
+  GrantRow,
+  PromotionRow,
+  RuleDetail,
+  RuleMeta,
+  Whoami,
+} from './types';
 
 export type { Env, EnvAccess, PromotionRow, Role, RuleDetail, RuleMeta, Whoami } from './types';
 export { ENVS } from './types';
@@ -53,6 +62,10 @@ export const mgmt = {
     apiFetch<{ rule: RuleDetail }>(`/api/envs/${env}/rules/${encodeURIComponent(key)}`),
   promotions: (env: Env) =>
     apiFetch<{ promotions: PromotionRow[] }>(`/api/envs/${env}/promotions`),
+  grants: () => apiFetch<{ grants: GrantRow[] }>('/api/admin/grants'),
+  auditEvents: (limit = 100) =>
+    apiFetch<{ events: AuditEvent[] }>(`/api/admin/audit?limit=${limit}`),
+  verifyAudit: () => apiFetch<AuditVerifyResult>('/api/admin/audit/verify'),
 };
 
 /** First env the caller may actually use — where `/` sends them. */

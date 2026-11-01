@@ -7,7 +7,8 @@ import { ApiError, mgmt, type Env } from '@/lib/api';
 import StatusChip from '@/components/StatusChip';
 import ErrorPanel from '@/components/ErrorPanel';
 import RuleEditor from '@/components/RuleEditor';
-import { canWriteEnv } from '@/lib/gate';
+import PromoteButton from '@/components/PromoteButton';
+import { canWriteEnv, promoteTargetFor } from '@/lib/gate';
 
 export const metadata = { title: 'Rule detail — Zara' };
 
@@ -54,6 +55,19 @@ export default async function RuleDetailPage({
         </Typography>
         <StatusChip status={rule.status} />
         <Chip label={rule.kind} size="small" variant="outlined" />
+        <Box sx={{ flexGrow: 1 }} />
+        {rule.status === 'published' &&
+          (() => {
+            const target = promoteTargetFor(who, env as Env);
+            return target ? (
+              <PromoteButton
+                env={env as Env}
+                ruleKey={rule.key}
+                toEnv={target}
+                sha256={rule.sha256}
+              />
+            ) : null;
+          })()}
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
         {env.toUpperCase()} · {canWriteEnv(who, env as Env) ? 'write' : 'read-only'} access ·{' '}

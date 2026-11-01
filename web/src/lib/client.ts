@@ -3,7 +3,11 @@
 //! send the user back through login.
 
 import type {
+  AuditEvent,
+  AuditVerifyResult,
   Env,
+  GrantRow,
+  PromoteResult,
   PromotionRow,
   RuleDetail,
   RuleMeta,
@@ -68,4 +72,25 @@ export const endpoints = {
       `/api/envs/${env}/rules/${encodeURIComponent(key)}/publish`,
       { method: 'POST' },
     ),
+  /** Target is derived server-side (dev→qa→uat→prod); env here is the
+   *  source lane. `published` reflects the best-effort engine push —
+   *  the poller converges either way. */
+  promoteRule: (env: Env, key: string) =>
+    bff<PromoteResult>(`/api/envs/${env}/rules/${encodeURIComponent(key)}/promote`, {
+      method: 'POST',
+    }),
+  // Tenant admin — RM-only routes; server 403s for anyone else.
+  grants: () => apiGet<{ grants: GrantRow[] }>('/api/admin/grants'),
+  putGrant: (body: { subjectType: string; subject: string; role: string }) =>
+    bff<{ grant: GrantRow }>('/api/admin/grants', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteGrant: (id: string) =>
+    bff<{ revoked: GrantRow }>(`/api/admin/grants/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  auditEvents: (limit = 100) =>
+    apiGet<{ events: AuditEvent[] }>(`/api/admin/audit?limit=${limit}`),
+  verifyAudit: () => apiGet<AuditVerifyResult>('/api/admin/audit/verify'),
 };
