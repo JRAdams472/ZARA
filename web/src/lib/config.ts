@@ -12,7 +12,24 @@ export const cfg = {
     process.env.OIDC_REDIRECT_URI ?? 'http://localhost:3400/auth/callback',
   sessionSecret: process.env.SESSION_SECRET ?? '',
   sessionSecure: 'SESSION_SECURE' in process.env,
+  /** Pinned public origin for auth redirects. Required in prod — when
+   *  set, redirects ignore Host/X-Forwarded-* entirely (host-header
+   *  poisoning defense). Unset → header-derived origin (dev/compose). */
+  publicOrigin: parsePublicOrigin(process.env.PUBLIC_ORIGIN),
 } as const;
+
+function parsePublicOrigin(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('PUBLIC_ORIGIN must be a valid absolute URL');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:')
+    throw new Error('PUBLIC_ORIGIN must be an http(s) URL');
+  return url.origin;
+}
 
 //! Dev token exchange (never prod). Dex proves the user's identity but
 //! cannot inject the claims mgmt's deny-first contract requires
