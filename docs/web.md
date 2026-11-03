@@ -23,6 +23,12 @@ Postgres or the engine, and access tokens never reach JavaScript.
 - **Prod:** the real IdP injects claims natively (Auth0 Action / Okta
   hook); `ZARA_DEV_KEY_FILE` stays unset and the IdP access token is
   forwarded untouched.
+- **Redirect origin:** post-login/logout redirects resolve through
+  `requestOrigin()`. `PUBLIC_ORIGIN` is **required in prod** — when set
+  it wins over `Host`/`X-Forwarded-*` so a spoofed Host header can't
+  steer redirects to a foreign origin (validated at boot, fails closed
+  on a malformed value). Unset, the forwarded/Host headers the
+  terminator sent are used — containerized-dev fallback only.
 
 ## BFF
 

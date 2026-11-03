@@ -9,6 +9,11 @@ ignore = [
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
+    # Same zip 8.x extraction class as the three above — `ZipArchive::extract`
+    # aborts on a symlink entry's unbounded declared-size reservation (DoS
+    # only; fix shipped in zip 9, which zen-engine can't take). Same
+    # unreachable-path justification applies.
+    "RUSTSEC-2026-0429",
     # Marvin timing oracle — affects RSA *decryption* (PKCS#1 v1.5 unwrap
     # oracles). `rsa` arrives transitively via zen-engine's reqsign
     # cloud-storage decision loaders (never instantiated) and is used
