@@ -30,8 +30,14 @@ export default defineConfig({
     {
       name: 'release-manager',
       dependencies: ['setup'],
-      testMatch: /admin\.spec\.ts/,
+      testMatch: /(?:admin|lifecycle)\.spec\.ts/,
       use: { storageState: 'e2e/.auth/rm.json' },
+    },
+    {
+      name: 'northstar-engineer',
+      dependencies: ['setup'],
+      testMatch: /isolation\.spec\.ts/,
+      use: { storageState: 'e2e/.auth/ns-engineer.json' },
     },
   ],
   webServer: {

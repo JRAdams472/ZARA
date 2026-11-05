@@ -45,6 +45,10 @@ staticPasswords:
     hash: "$2b$10$3.9lcn9rn8414oAbSK5axOyQ3GILKY/uCd4ZBEUfdTpI6Fi7rTIk6"
     username: "auditor"
     userID: "auditor-user"
+  - email: "ns-engineer@zara.dev"
+    hash: "$2b$10$99hiEU4dtLEgk2/7dz5Yru6NEy6cYSVJlL9N3WdXKfJRr7O8jrHlW"
+    username: "ns-engineer"
+    userID: "ns-engineer-user"
 
 staticClients:
   - id: zara-web
