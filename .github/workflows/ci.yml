@@ -107,7 +107,7 @@ jobs:
       - name: Apply demo seeds
         # Same files/command as the compose `seed` service so CI and the
         # dev stack stay identical; makes t07 verify (not skip).
-        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql -f seed/004_northstar_grants.sql -f seed/005_demo_trid_fees.sql
       - name: Isolation suite
         run: bash tests/isolation/run.sh
       - name: Engine loader test (zara_engine role + RLS)
@@ -153,7 +153,7 @@ jobs:
       - name: Apply migrations (bootstrap + control + env ×4)
         run: cargo run -p zara-migrate -- --set-role-passwords
       - name: Apply demo seeds
-        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql -f seed/004_northstar_grants.sql -f seed/005_demo_trid_fees.sql
       - name: Service integration tests (JWT gate, PII, seeded eval)
         run: cargo test -p zara-engine
       - name: HTTP eval bench (p95 < 15 ms)
@@ -216,7 +216,7 @@ jobs:
       - name: Apply migrations (bootstrap + control + env ×4)
         run: cargo run -p zara-migrate -- --set-role-passwords
       - name: Apply demo seeds
-        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql -f seed/004_northstar_grants.sql -f seed/005_demo_trid_fees.sql
       - name: Provision transit mount + scoped token (dev OpenBao)
         run: |
           set -euo pipefail
@@ -349,7 +349,7 @@ jobs:
       - name: Apply migrations (bootstrap + control + env ×4)
         run: cargo run -p zara-migrate -- --set-role-passwords
       - name: Apply demo seeds
-        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql
+        run: psql "$MIGRATE_DATABASE_URL" -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql -f seed/003_demo_grants.sql -f seed/004_northstar_grants.sql -f seed/005_demo_trid_fees.sql
       - name: Provision transit mount + scoped token (dev OpenBao)
         run: |
           set -euo pipefail
@@ -443,7 +443,7 @@ jobs:
           ZARA_TOKEN_AUDIENCE: zara-mgmt
           DEV_TENANT_ID: aa5ce000-0000-4000-8000-0000000000ac
           DEV_ENVS: dev,qa,uat,prod
-          DEV_CLAIMS_MAP: '{"engineer@zara.dev":{"envs":["dev","qa","uat"]},"auditor@zara.dev":{"envs":["qa","uat"]}}'
+          DEV_CLAIMS_MAP: '{"engineer@zara.dev":{"envs":["dev","qa","uat"]},"auditor@zara.dev":{"envs":["qa","uat"]},"ns-engineer@zara.dev":{"tenantId":"bb0215a0-0000-4000-8000-0000000000b2","envs":["dev","qa","uat"]}}'
         run: |
           npx playwright install --with-deps chromium
           npm run test:e2e

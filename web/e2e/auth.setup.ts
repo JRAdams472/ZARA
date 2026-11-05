@@ -7,6 +7,7 @@ const PERSONAS = [
   { name: 'engineer', email: 'engineer@zara.dev', password: 'engineer123' },
   { name: 'auditor', email: 'auditor@zara.dev', password: 'auditor123' },
   { name: 'rm', email: 'admin@zara.dev', password: 'admin123' },
+  { name: 'ns-engineer', email: 'ns-engineer@zara.dev', password: 'ns-engineer123' },
 ] as const;
 
 async function login(page: Page, email: string, password: string) {

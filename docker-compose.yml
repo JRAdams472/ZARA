@@ -127,7 +127,7 @@ services:
     # FORCE RLS still requires SET zara.tenant_id for env-schema DML.
     entrypoint: ["sh", "-c"]
     command:
-      - "psql postgres://zara_migrate@db:5432/zara -v ON_ERROR_STOP=1 -f /seed/001_demo_tenants.sql -f /seed/002_demo_fees.sql -f /seed/003_demo_grants.sql -f /seed/005_demo_trid_fees.sql"
+      - "psql postgres://zara_migrate@db:5432/zara -v ON_ERROR_STOP=1 -f /seed/001_demo_tenants.sql -f /seed/002_demo_fees.sql -f /seed/003_demo_grants.sql -f /seed/004_northstar_grants.sql -f /seed/005_demo_trid_fees.sql"
     restart: "no"
 
   # --- Execution engine (Z2): eval API on :8400 --------------------------
@@ -248,7 +248,7 @@ services:
       ZARA_TOKEN_AUDIENCE: zara-mgmt
       DEV_TENANT_ID: aa5ce000-0000-4000-8000-0000000000ac
       DEV_ENVS: dev,qa,uat,prod
-      DEV_CLAIMS_MAP: '{"auditor@zara.dev":{"envs":["qa","uat"]},"engineer@zara.dev":{"envs":["dev","qa","uat"]}}'
+      DEV_CLAIMS_MAP: '{"auditor@zara.dev":{"envs":["qa","uat"]},"engineer@zara.dev":{"envs":["dev","qa","uat"]},"ns-engineer@zara.dev":{"tenantId":"bb0215a0-0000-4000-8000-0000000000b2","envs":["dev","qa","uat"]}}'
     restart: unless-stopped
 
 volumes:
