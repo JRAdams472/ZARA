@@ -16,9 +16,11 @@ fi
 ACME=$(psql_admin -c "SELECT id FROM zara_control.tenants WHERE slug='acme-mortgage';")
 NORTH=$(psql_admin -c "SELECT id FROM zara_control.tenants WHERE slug='northstar-lending';")
 
-# Expected artifact counts per tenant: dev holds 2 published + 2 drafts;
-# qa/uat/prod hold the 2 published rows only.
-declare -A EXPECT=( [zara_dev]=4 [zara_qa]=2 [zara_uat]=2 [zara_prod]=2 )
+# Expected artifact counts per tenant: acme dev holds 15 published + 2
+# drafts (origination pair + seed/005 TRID matrix), northstar 2 + 2;
+# qa/uat/prod hold the published rows only (15 acme, 2 northstar).
+declare -A EXPECT_ACME=( [zara_dev]=17 [zara_qa]=15 [zara_uat]=15 [zara_prod]=15 )
+declare -A EXPECT_NORTH=( [zara_dev]=4 [zara_qa]=2 [zara_uat]=2 [zara_prod]=2 )
 declare -A PW=( [zara_dev]=ZARA_APP_DEV_PASSWORD [zara_qa]=ZARA_APP_QA_PASSWORD
                 [zara_uat]=ZARA_APP_UAT_PASSWORD [zara_prod]=ZARA_APP_PROD_PASSWORD )
 declare -A ROLE=( [zara_dev]=zara_app_dev [zara_qa]=zara_app_qa
@@ -26,11 +28,13 @@ declare -A ROLE=( [zara_dev]=zara_app_dev [zara_qa]=zara_app_qa
 
 for schema in zara_dev zara_qa zara_uat zara_prod; do
     for tenant in "$ACME" "$NORTH"; do
+        [[ $tenant == "$ACME" ]] && table=EXPECT_ACME || table=EXPECT_NORTH
+        ref="${table}[$schema]"
         n=$(psql_as "${ROLE[$schema]}" "${PW[$schema]}" \
             -c "SET zara.tenant_id='$tenant';
                 SELECT count(*) FROM ${schema}.rule_artifacts;" | scalar)
-        [[ $n == "${EXPECT[$schema]}" ]] || {
-            echo "FAIL: $schema expected ${EXPECT[$schema]} rows under GUC $tenant, got '$n'" >&2
+        [[ $n == "${!ref}" ]] || {
+            echo "FAIL: $schema expected ${!ref} rows under GUC $tenant, got '$n'" >&2
             exit 1; }
     done
     # Under acme's GUC, zero of northstar's rows are reachable — and vice versa.
@@ -38,7 +42,7 @@ for schema in zara_dev zara_qa zara_uat zara_prod; do
         -c "SET zara.tenant_id='$ACME';
             SELECT count(*) FROM ${schema}.rule_artifacts WHERE tenant_id='$NORTH';" | scalar)
     [[ $leak == "0" ]] || { echo "FAIL: $schema leaked $leak cross-tenant rows" >&2; exit 1; }
-    echo "  $schema: per-tenant counts ${EXPECT[$schema]}, cross-tenant 0"
+    echo "  $schema: acme ${EXPECT_ACME[$schema]} / northstar ${EXPECT_NORTH[$schema]}, cross-tenant 0"
 done
 
 # Drafts exist only in dev, under the owning tenant.
