@@ -153,6 +153,25 @@ prod sets `GRPC_TLS_CERT`/`GRPC_TLS_KEY` for TLS 1.3. Contract of record:
 `proto/zara/engine/v1/engine.proto` (Rust stubs committed at
 `src/grpc/gen/`, rebuilt by `build.rs` via vendored `protoc`).
 
+Listener hardening: `GRPC_MAX_CONCURRENT_STREAMS` (default 128) caps
+HTTP/2 streams per connection and `GRPC_TIMEOUT_MS` (default 30s) is the
+per-RPC deadline — a stalled or abusive mgmt caller can't hold the
+listener.
+
+### Production service auth (dev-provable seam)
+
+The call chain is: mgmt mints a service token → attaches it as gRPC
+`authorization` Bearer → engine validates issuer/aud/`tenant_id`/
+`permitted_environments` → `authorize()` compares the claim to the
+request. In dev this is a `zara_devtoken`-minted static-JWKS JWT
+(`ZARA_JWKS_FILE`); dex `zara-svc` exists for client-credentials but
+cannot inject `tenant_id`/`permitted_environments` natively — the seam
+is deliberate: prod plugs a claims-aware IdP (token exchange or a
+claims-rule at the IdP) behind `OIDC_ISSUER`/`OIDC_JWKS_URL` with no
+code change. Token rotation is just IdP key rotation + `aud` unchanged —
+the engine re-resolves JWKS unless a static file is set (dev-only,
+logged at WARN).
+
 Loader reads run **as `zara_engine`** (SELECT-only) with `zara.tenant_id`
 stamped per tenant in-transaction — FORCE RLS applies to the engine role;
 no rows are visible without the GUC. Eval threads never touch the pool.
