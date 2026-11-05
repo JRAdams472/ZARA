@@ -1,0 +1,132 @@
+# zarashots — isolated screenshot stack (MPE-177, docs/wiki-screenshots.md).
+# NEVER runs against the dev DB: own project (-p zarashots), own pgdata
+# volume, own port block (db 5632, dex 5756, mgmt 8501, web 3500).
+#
+#   docker compose -f tools/wiki-shots/docker-compose.zarashots.yml -p zarashots up -d
+#
+# Synthetic-only credentials — a local throwaway fixture on loopback; no
+# real secrets here. Engine/openbao/seq/jaeger are skipped: nothing the
+# screenshot set shows needs them (KMS unset → secrets API 503s, and no
+# secrets page exists in the UI).
+name: zarashots
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: zara
+      POSTGRES_PASSWORD: zarashots-pg
+      POSTGRES_DB: zara
+    ports:
+      - "5632:5432"
+    volumes:
+      # postgres:18 moved the data dir under /var/lib/postgresql/pgdata —
+      # mount the parent so the image can init in its new location.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zara -d zara"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://zara:zarashots-pg@db:5432/zara
+      MIGRATE_DATABASE_URL: postgres://zara_migrate:zarashots-mig@db:5432/zara
+      ZARA_MIGRATE_PASSWORD: zarashots-mig
+      ZARA_APP_DEV_PASSWORD: zarashots-dev
+      ZARA_APP_QA_PASSWORD: zarashots-qa
+      ZARA_APP_UAT_PASSWORD: zarashots-uat
+      ZARA_APP_PROD_PASSWORD: zarashots-prod
+      ZARA_PROMOTE_PASSWORD: zarashots-pro
+      ZARA_ENGINE_PASSWORD: zarashots-eng
+      ZARA_MGMT_PASSWORD: zarashots-mgmt
+    restart: "no"
+
+  seed:
+    image: postgres:18-alpine
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ../../seed:/seed:ro
+    environment:
+      PGPASSWORD: zarashots-mig
+    entrypoint: ["sh", "-c"]
+    command:
+      - "psql postgres://zara_migrate@db:5432/zara -v ON_ERROR_STOP=1 -f /seed/001_demo_tenants.sql -f /seed/002_demo_fees.sql -f /seed/003_demo_grants.sql -f /seed/004_northstar_grants.sql -f /seed/005_demo_trid_fees.sql"
+    restart: "no"
+
+  dex:
+    image: dexidp/dex:v2.46.0
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    environment:
+      DEX_ZARA_SVC_SECRET: zarashots-svc
+      DEX_ZARA_CI_SECRET: zarashots-ci
+      DEX_CLIENT_CREDENTIAL_GRANT_ENABLED_BY_DEFAULT: "true"
+    volumes:
+      - ./dex.config.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - "5756:5556"
+
+  mgmt:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.mgmt
+    depends_on:
+      db:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    ports:
+      - "8501:8401"
+    volumes:
+      - ../../.devkeys:/run/devkeys:ro
+    environment:
+      PORT: "8401"
+      MGMT_DATABASE_URL: postgres://zara_mgmt:zarashots-mgmt@db:5432/zara
+      RULES_DATABASE_URL: postgres://zara_app_dev:zarashots-dev@db:5432/zara
+      PROMOTE_DATABASE_URL: postgres://zara_promote:zarashots-pro@db:5432/zara
+      ZARA_JWKS_FILE: /run/devkeys/jwks.json
+      OIDC_ISSUER: zara-devtoken
+      OIDC_AUDIENCE: zara-mgmt
+      ENGINE_GRPC_TOKEN_FILE: /run/devkeys/grpc-svc.jwt
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.web
+    depends_on:
+      mgmt:
+        condition: service_started
+      dex:
+        condition: service_started
+    ports:
+      - "3500:3400"
+    volumes:
+      - ../../.devkeys:/run/devkeys:ro
+    environment:
+      PORT: "3400"
+      API_URL: http://mgmt:8401
+      SESSION_SECRET: zarashots-session-secret-not-for-real-use
+      OIDC_AUTHORIZE_URL: http://localhost:5756/dex/auth
+      OIDC_TOKEN_URL: http://dex:5556/dex/token
+      OIDC_CLIENT_ID: zara-web
+      OIDC_REDIRECT_URI: http://localhost:3500/auth/callback
+      PUBLIC_ORIGIN: http://localhost:3500
+      ZARA_DEV_KEY_FILE: /run/devkeys/dev.pem
+      ZARA_TOKEN_AUDIENCE: zara-mgmt
+      DEV_TENANT_ID: aa5ce000-0000-4000-8000-0000000000ac
+      DEV_ENVS: dev,qa,uat,prod
+      DEV_CLAIMS_MAP: '{"auditor@zara.dev":{"envs":["qa","uat"]},"engineer@zara.dev":{"envs":["dev","qa","uat"]},"ns-engineer@zara.dev":{"tenantId":"bb0215a0-0000-4000-8000-0000000000b2","envs":["dev","qa","uat"]}}'
+    restart: unless-stopped
+
+volumes:
+  pgdata:

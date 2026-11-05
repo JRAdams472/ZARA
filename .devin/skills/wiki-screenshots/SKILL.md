@@ -5,21 +5,32 @@ description: Capture real web-UI screenshots for the GitHub wiki — run the iso
 
 # Wiki screenshots
 
-The Zara wiki-screenshots runbook and tooling are created in milestone Z5
-(Management UI) — `tools/wiki-shots/` does not exist yet. Until then this
-skill documents the sibling conventions the Z5 tooling must follow
-(inherited from LENA2/LOLA):
+Tooling lives in `tools/wiki-shots/` (built in MPE-177): a dedicated
+`docker-compose.zarashots.yml` stack, `dex.config.yaml`, `capture.mjs`,
+and the runbook at `docs/wiki-screenshots.md`.
 
-- Always use a separate compose project (`-p zarashots`) — never shoot
-  against the dev DB.
-- Seed demo data via a dedicated `--profile seed` service / idempotent
-  seeder script (`tools/wiki-shots/seed_demo.*`) before capturing.
-- `networkidle` never settles on pages with live queries — wait on
-  rendered text instead.
+## Rules
+
+- Always use the `zarashots` project (`docker compose -f
+  tools/wiki-shots/docker-compose.zarashots.yml -p zarashots up -d`) —
+  never shoot against the dev DB. Its port block is 5632/5756/8501/3500
+  so it coexists with the dev stack.
+- The stack seeds via the repo `seed/` files on first boot (idempotent;
+  `-v` on down to reseed fresh).
+- `networkidle` never settles on pages with live queries — `capture.mjs`
+  waits on the rendered `waitFor` string per page instead.
 - Inspect every PNG for loading spinners before publishing to the
   `Zara.wiki` repo (`images/` + `![alt](images/x.png)`, push to `master`).
-- Screenshots must never contain real or realistic PII — synthetic
-  tenants/scenarios only.
-- When Z5 lands the runbook lives at `docs/wiki-screenshots.md` and the
-  capture script at `tools/wiki-shots/capture.mjs`; update this skill
-  then.
+- Screenshots must never contain real or realistic PII — the seeded
+  fixtures (`acme-mortgage`, `northstar-lending`, `*@zara.dev`) are the
+  only acceptable content.
+
+## Quick path
+
+```bash
+docker compose -f tools/wiki-shots/docker-compose.zarashots.yml -p zarashots up -d
+cd tools/wiki-shots && npm i && npx playwright install chromium
+node capture.mjs          # → images/*.png, fails on spinner residue
+```
+
+Full procedure + teardown: `docs/wiki-screenshots.md`.

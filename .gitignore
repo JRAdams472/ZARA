@@ -42,3 +42,7 @@ coverage/
 
 # Local data dirs (tenant vaults, seeded dumps)
 data/
+
+# zarashots capture tooling
+tools/wiki-shots/node_modules/
+tools/wiki-shots/images/
