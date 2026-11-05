@@ -59,6 +59,7 @@ describe('unset KMS → 503 on every secrets route', () => {
     expect((await call(kit.noCipherApp, 'PUT', `/api/admin/secrets/${SECRET}`, t, { value: 'x' })).statusCode).toBe(503);
     expect((await call(kit.noCipherApp, 'GET', '/api/admin/secrets', t)).statusCode).toBe(503);
     expect((await call(kit.noCipherApp, 'POST', `/api/admin/secrets/${SECRET}/rewrap`, t)).statusCode).toBe(503);
+    expect((await call(kit.noCipherApp, 'POST', '/api/admin/secrets/rewrap-all', t)).statusCode).toBe(503);
     // …while the rest of the service works:
     expect((await call(kit.noCipherApp, 'GET', '/api/whoami', t)).statusCode).toBe(200);
     expect((await call(kit.noCipherApp, 'GET', '/healthz')).statusCode).toBe(200);
@@ -161,5 +162,52 @@ describe('cipher-backed surface (KMS-gated)', () => {
   it('rewrap on a missing secret → 404', async () => {
     if (!kit?.cipher) return;
     expect((await call(kit.app, 'POST', '/api/admin/secrets/nope/rewrap', await rmToken())).statusCode).toBe(404);
+  });
+
+  it('rewrap-all is RM-only', async () => {
+    if (!kit) return;
+    expect((await call(kit.app, 'POST', '/api/admin/secrets/rewrap-all', await engToken())).statusCode).toBe(403);
+    expect((await call(kit.app, 'POST', '/api/admin/secrets/rewrap-all', await audToken())).statusCode).toBe(403);
+  });
+
+  it('rewrap-all sweeps every secret — envelopes valid, per-row audit, no plaintext', async () => {
+    if (!kit?.cipher) return;
+    const t = await rmToken();
+    const second = 'it-secret-key-2';
+    const secondPlain = 'second-secret-🔐';
+    expect((await call(kit.app, 'PUT', `/api/admin/secrets/${second}`, t, { value: secondPlain })).statusCode).toBe(200);
+
+    const r = await call(kit.app, 'POST', '/api/admin/secrets/rewrap-all', t);
+    expect(r.statusCode).toBe(200);
+    const body = JSON.parse(r.body) as { rewrapped: string[]; failed: { name: string; reason: string }[] };
+    expect(body.failed).toEqual([]);
+    expect(body.rewrapped).toContain(SECRET);
+    expect(body.rewrapped).toContain(second);
+    // Response carries names only — never envelopes or plaintext.
+    expect(r.body).not.toContain('vault:');
+    expect(r.body).not.toContain(PLAINTEXT);
+    expect(r.body).not.toContain(secondPlain);
+
+    // Every swept row still decrypts to its original plaintext.
+    const rows = await withTenantTx(kit.sql, ACME, (tx) => tx<{ name: string; ciphertext: string }[]>`
+      SELECT name, ciphertext FROM zara_control.tenant_secrets
+       WHERE name IN (${SECRET}, ${second})`);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(isEnvelope(row.ciphertext)).toBe(true);
+    }
+    const byName = new Map(rows.map((x) => [x.name, x.ciphertext]));
+    expect(await kit.cipher.decrypt(byName.get(SECRET)!)).toBe(PLAINTEXT);
+    expect(await kit.cipher.decrypt(byName.get(second)!)).toBe(secondPlain);
+
+    // One attributed audit row per swept secret, marked as a sweep.
+    const evts = await withTenantTx(kit.sql, ACME, (tx) => tx<{ name: string }[]>`
+      SELECT detail->>'name' AS name FROM zara_control.audit_events
+       WHERE action = 'secret.rewrap' AND detail->>'via' = 'rewrap-all'`);
+    const swept = new Set(evts.map((e) => e.name));
+    expect(swept.has(SECRET)).toBe(true);
+    expect(swept.has(second)).toBe(true);
+    const chain = await verifyChain(kit.sql, ACME);
+    expect(chain.ok).toBe(true);
   });
 });

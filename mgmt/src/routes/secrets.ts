@@ -10,6 +10,7 @@ import { record, AUDIT_ACTIONS } from '../db/audit.js';
 import { withTenantTx } from '../db/pool.js';
 import {
   getSecretTx,
+  listSecretsTx,
   listSecretsWithCiphertextTx,
   updateCiphertextTx,
   upsertSecretTx,
@@ -110,5 +111,43 @@ export function registerSecrets(
     });
     if (!updated) throw notFound('secret not found');
     return { name, rewrapped: true };
+  });
+
+  // Rotation sweep — after a transit keys/*/rotate, re-seal every stored
+  // envelope under the latest key version. Per-row tx: one bad envelope
+  // or KMS hiccup can't roll back the rest, and every committed row gets
+  // its own attributed audit entry (idempotent — safe to re-run).
+  app.post('/api/admin/secrets/rewrap-all', RM, async (req) => {
+    const c = needCipher();
+    const p = req.principal;
+    const names = await withTenantTx(sql, p.tenantId, (tx) => listSecretsTx(tx));
+    const rewrapped: string[] = [];
+    const failed: { name: string; reason: string }[] = [];
+    for (const row of names) {
+      try {
+        const done = await withTenantTx(sql, p.tenantId, async (tx) => {
+          const fresh = await getSecretTx(tx, row.name);
+          if (!fresh) return false; // deleted between list and sweep
+          const envelope = await c.rewrap(fresh.ciphertext);
+          await updateCiphertextTx(tx, {
+            name: row.name,
+            ciphertext: envelope,
+            updatedBy: p.sub,
+          });
+          await record(tx, p, {
+            action: AUDIT_ACTIONS.secretRewrap,
+            detail: { name: row.name, via: 'rewrap-all' },
+          });
+          return true;
+        });
+        if (done) rewrapped.push(row.name);
+      } catch (e) {
+        failed.push({
+          name: row.name,
+          reason: (e instanceof Error ? e.message : String(e)).slice(0, 200),
+        });
+      }
+    }
+    return { rewrapped, failed };
   });
 }
