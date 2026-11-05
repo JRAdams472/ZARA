@@ -12,7 +12,7 @@ const SHA_RE = /sha256\s+([0-9a-f]{64})/;
 async function snackbarSha(page: Page): Promise<string> {
   const el = page.getByText(SHA_RE).first();
   await expect(el).toBeVisible({ timeout: 15_000 });
-  const m = SHA_RE.exec(await el.textContent());
+  const m = SHA_RE.exec((await el.textContent()) ?? '');
   expect(m, 'snackbar must carry the full sha256').toBeTruthy();
   return m![1]!;
 }
