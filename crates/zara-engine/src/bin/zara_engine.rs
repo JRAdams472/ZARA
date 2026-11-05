@@ -88,7 +88,9 @@ async fn main() -> Result<()> {
             _ => anyhow::bail!("GRPC_TLS_CERT and GRPC_TLS_KEY must be set together"),
         };
         let tls_enabled = tls.is_some();
-        let mut builder = tonic::transport::Server::builder();
+        let mut builder = tonic::transport::Server::builder()
+            .concurrency_limit_per_connection(cfg.grpc_max_concurrent_streams)
+            .timeout(std::time::Duration::from_millis(cfg.grpc_timeout_ms));
         if let Some(t) = tls {
             builder = builder.tls_config(t).context("gRPC TLS config")?;
         }

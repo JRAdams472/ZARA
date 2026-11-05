@@ -31,6 +31,13 @@ pub struct Config {
     /// same shape as OpenBao tls_disable — auth still verified).
     pub grpc_tls_cert: Option<String>,
     pub grpc_tls_key: Option<String>,
+    /// Max HTTP/2 streams per gRPC connection — bounds fan-in from a
+    /// single caller; combined with per-request timeout it keeps a
+    /// stalled or abusive client from holding the listener.
+    pub grpc_max_concurrent_streams: usize,
+    /// Per-RPC deadline — PublishSnapshot is a fingerprint probe + load,
+    /// never seconds-scale, so a stalled call fails fast.
+    pub grpc_timeout_ms: u64,
 }
 
 impl Config {
@@ -76,6 +83,8 @@ impl Config {
             grpc_port: env_parse("GRPC_PORT", 9443)?,
             grpc_tls_cert: std::env::var("GRPC_TLS_CERT").ok(),
             grpc_tls_key: std::env::var("GRPC_TLS_KEY").ok(),
+            grpc_max_concurrent_streams: env_parse("GRPC_MAX_CONCURRENT_STREAMS", 128)?,
+            grpc_timeout_ms: env_parse("GRPC_TIMEOUT_MS", 30_000)?,
         })
     }
 }
