@@ -127,7 +127,7 @@ services:
     # FORCE RLS still requires SET zara.tenant_id for env-schema DML.
     entrypoint: ["sh", "-c"]
     command:
-      - "psql postgres://zara_migrate@db:5432/zara -v ON_ERROR_STOP=1 -f /seed/001_demo_tenants.sql -f /seed/002_demo_fees.sql -f /seed/003_demo_grants.sql"
+      - "psql postgres://zara_migrate@db:5432/zara -v ON_ERROR_STOP=1 -f /seed/001_demo_tenants.sql -f /seed/002_demo_fees.sql -f /seed/003_demo_grants.sql -f /seed/005_demo_trid_fees.sql"
     restart: "no"
 
   # --- Execution engine (Z2): eval API on :8400 --------------------------

@@ -52,6 +52,45 @@ adjustment_set "origination-adj":
 A veteran refinancing sees `900 − 500 = 400`; a non-veteran purchase sees
 no origination fee at all (base rule not charged).
 
+## Demo matrix (`seed/005_demo_trid_fees.sql`)
+
+The Acme tenant ships a realistic closing-cost lineup so
+`POST /api/evaluate/{env}` returns a TRID-categorized payload an
+integration consumer can render directly. All rows are published in every
+environment (dev/qa/uat/prod) — no dev drafts.
+
+| Key | Bucket | Charged when | Amount |
+|---|---|---|---|
+| `origination` | A | rateTermRefi / cashOutRefi | $900 flat |
+| `underwriting` | A | any purpose | $795 flat |
+| `processing` | A | any purpose | $450 flat |
+| `discount-points` | A | `borrower.discountPoints == true` | `loan.amount × 0.0025` |
+| `appraisal` | B | any purpose | $650 flat |
+| `credit-report` | B | any purpose | $45 flat |
+| `flood-cert` | B | any purpose | $15 flat |
+| `title-insurance` | C | any purpose | purchase $1,150 / refi $650 |
+| `survey` | C | purchase only | $400 flat |
+| `recording-fee` | E | any purpose | $125 flat |
+| `transfer-tax` | E | purchase only | `loan.amount × 0.001` |
+| `prepaid-interest` | F | any purpose | `loan.amount × 0.065 ÷ 365 × 15` |
+| `escrow-deposit` | G | any purpose | $2,400 flat |
+| `pest-inspection` | H | purchase only | $95 flat |
+
+Expression-priced rows emit a zen-expression in the decision-table amount
+cell — output cells evaluate against the full scenario context, so
+`loan.amount` resolves without being declared as a table input.
+
+Contract notes for consumers:
+
+- **Every published `base_fee` emits a line** — a fee whose rules don't
+  charge still appears with `total: 0` and its `feeCode`/`tridBucket`.
+  Filter on `total > 0` for the applicable set.
+- **`origination-adj`** (adjustment_set, `appliesTo: origination`) adds
+  veteran −$500 / high-balance +$250 / floor 0 on top of the origination
+  base only — other fees carry no adjustments.
+- Northstar keeps its own two-artifact matrix (`origination` $1,200 +
+  `origination-adj`) as the tenant-isolation contrast fixture.
+
 ## Input contract
 
 The eval input is a **PII-free** loan scenario (same philosophy as MPEx's
