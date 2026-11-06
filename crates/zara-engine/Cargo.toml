@@ -43,7 +43,7 @@ zen-engine = "2"
 zen-expression = "2"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-build = "0.14"
 # Vendored protoc — keeps codegen self-contained (no system install on
 # dev machines or CI runners).
 protoc-bin-vendored = "3"
