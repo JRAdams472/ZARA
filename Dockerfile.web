@@ -1,18 +1,18 @@
 # zara-web image — the management console (:3400). Next.js App Router;
 # `output: 'standalone'` keeps the runtime image to the server bundle only.
-FROM node:24-bookworm-slim AS deps
+FROM node:25-bookworm-slim AS deps
 WORKDIR /app
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 
-FROM node:24-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY web .
 # Build needs no secrets — session/OIDC config is all runtime env.
 RUN npm run build
 
-FROM node:24-bookworm-slim
+FROM node:25-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
 RUN groupadd -r zara && useradd -r -g zara zara
