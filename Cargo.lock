@@ -5763,7 +5763,7 @@ dependencies = [
  "jsonwebtoken",
  "prost",
  "protoc-bin-vendored",
- "rand 0.8.8",
+ "rand 0.10.3",
  "regex",
  "reqwest 0.12.28",
  "rsa",
