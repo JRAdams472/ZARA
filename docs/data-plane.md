@@ -98,13 +98,22 @@ secret value itself is managed through the mgmt API
 
 ## Seeds and reset
 
-`seed/001_demo_tenants.sql` (control registry) + `seed/002_demo_fees.sql`
-(every env schema) run once via the `seed` service — or by hand:
+All five seed files run once via the `seed` service — or by hand:
 
 ```bash
 psql postgres://zara_migrate:$ZARA_MIGRATE_PASSWORD@localhost:5532/zara \
-  -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql
+  -v ON_ERROR_STOP=1 -f seed/001_demo_tenants.sql -f seed/002_demo_fees.sql \
+  -f seed/003_demo_grants.sql -f seed/004_northstar_grants.sql \
+  -f seed/005_demo_trid_fees.sql
 ```
+
+| File | Contents |
+|---|---|
+| `001_demo_tenants.sql` | `zara_control` tenant registry (acme, northstar) |
+| `002_demo_fees.sql` | Base fee artifacts in every env schema |
+| `003_demo_grants.sql` | Acme RBAC grants (auditor also on Northstar) |
+| `004_northstar_grants.sql` | Northstar RBAC grants (`ns-engineer` persona) |
+| `005_demo_trid_fees.sql` | 13-artifact TRID demo matrix, published in all four envs ([fee-model.md](fee-model.md#demo-matrix-seed005_demo_trid_feessql)) |
 
 Seeds are idempotent (`ON CONFLICT … DO NOTHING`). Full reset:
 

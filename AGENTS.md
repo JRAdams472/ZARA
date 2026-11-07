@@ -240,6 +240,6 @@ docker compose config
 # Engine (from Z2):
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 # Management plane (from Z3):
-npm run lint && npm run typecheck && npm test -- --ci && npm run build
+npm run lint && npm run typecheck && npm test && npm run build
 # Full stack: docker compose up --build
 ```
