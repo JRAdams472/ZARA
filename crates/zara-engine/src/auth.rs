@@ -26,6 +26,20 @@ const ALLOWED_ALGS: &[Algorithm] = &[Algorithm::RS256, Algorithm::ES256, Algorit
 /// (issuer key rotation). Bounds refresh traffic on a kid-scan attempt.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(300);
 
+/// Discovery/JWKS fetch bounds — a hung IdP must never stall the eval
+/// request that triggered a kid-refresh, so total + connect timeouts cap
+/// every outbound call this validator makes.
+const HTTP_TOTAL_TIMEOUT: Duration = Duration::from_secs(10);
+const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn http_client() -> anyhow::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(HTTP_TOTAL_TIMEOUT)
+        .connect_timeout(HTTP_CONNECT_TIMEOUT)
+        .build()
+        .context("building JWKS http client")
+}
+
 #[derive(Debug)]
 pub enum AuthError {
     /// Token failed validation — malformed, bad signature, expired,
@@ -96,7 +110,7 @@ impl JwtValidator {
         audiences: &[String],
         jwks_url: Option<&str>,
     ) -> anyhow::Result<Self> {
-        let client = reqwest::Client::new();
+        let client = http_client()?;
         let jwks_url = match jwks_url {
             Some(u) => u.to_string(),
             None => {
@@ -145,7 +159,7 @@ impl JwtValidator {
         Ok(Self {
             expected_iss: issuer.map(str::to_string),
             expected_aud: audiences.to_vec(),
-            client: reqwest::Client::new(),
+            client: http_client()?,
             jwks_url: None,
             keys: RwLock::new(KeyCache {
                 by_kid: decode_keys(&jwks),
