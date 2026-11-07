@@ -12,12 +12,16 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Snackbar from '@mui/material/Snackbar';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
-import type { DecisionGraphType } from '@gorules/jdm-editor';
+import type { DecisionGraphType, DecisionTableType } from '@gorules/jdm-editor';
 
 import DecisionEditor from './DecisionEditor';
+import DecisionTableEditor from './DecisionTableEditor';
 import { ClientApiError, endpoints } from '@/lib/client';
 import { canonicalJson } from '@/lib/gate';
+import { findSimpleTable, patchTableContent } from '@/lib/jdm';
 import type { Env, RuleDetail } from '@/lib/types';
 
 function mutationError(e: unknown): string {
@@ -51,13 +55,34 @@ export default function RuleEditor({
   const editable = canWrite && env === 'dev' && draft;
 
   // `edited` holds unsaved graph changes; absent edits, the editor shows
-  // the persisted spec (spec IS the JDM doc at this boundary). The editor
-  // emits onChange once on mount with the loaded graph — only a payload
-  // that differs from spec counts as a user edit.
+  // the persisted jdm — the canonical graph column (seeded rows carry a
+  // fee descriptor in `spec`, so jdm is the graph source of truth). The
+  // editor emits onChange once on mount with the loaded graph — only a
+  // payload that differs from jdm counts as a user edit.
   const [edited, setEdited] = useState<DecisionGraphType | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [publishedSha, setPublishedSha] = useState<string | null>(null);
   const dirty = edited !== null;
+
+  const jdm = (rule.jdm ?? rule.spec) as DecisionGraphType;
+  const graph = edited ?? jdm;
+
+  // "Simple" editing = standalone decision-table view when the graph holds
+  // exactly one decisionTableNode; `null` view = not chosen yet (defaults to
+  // simple when eligible, advanced otherwise).
+  const simple = findSimpleTable(graph);
+  const [view, setView] = useState<'simple' | 'advanced' | null>(null);
+  const effectiveView = view ?? (simple.ok ? 'simple' : 'advanced');
+
+  const onTableChange = (table: DecisionTableType) => {
+    if (!editable || !simple.ok) return;
+    // The editor emits on mount with the normalized table — only an actual
+    // content change counts as a user edit.
+    const current = (graph.nodes ?? []).find((n) => n.id === simple.nodeId)?.content;
+    if (canonicalJson(table) === canonicalJson(current)) return;
+    const next = patchTableContent(graph, simple.nodeId, table);
+    setEdited(canonicalJson(next) === canonicalJson(jdm) ? null : next);
+  };
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['rules', env] });
@@ -83,10 +108,10 @@ export default function RuleEditor({
   });
 
   /** New-draft-from-published — published rows never mutate; minting a
-   *  working copy from the published spec is the only "edit" offered. */
+   *  working copy from the published graph is the only "edit" offered. */
   const newDraft = useMutation({
     mutationFn: () =>
-      endpoints.createRule(env, { key: ruleKey, kind: rule.kind, spec: rule.spec }),
+      endpoints.createRule(env, { key: ruleKey, kind: rule.kind, spec: jdm }),
     onSuccess: refresh,
   });
 
@@ -174,14 +199,41 @@ export default function RuleEditor({
         </Alert>
       )}
 
-      <DecisionEditor
-        value={edited ?? (rule.spec as DecisionGraphType)}
-        onChange={(v) => {
-          if (!editable || !v) return;
-          setEdited(canonicalJson(v) === canonicalJson(rule.spec) ? null : v);
-        }}
-        disabled={!editable}
-      />
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={effectiveView}
+        onChange={(_, v) => v && setView(v)}
+        sx={{ mb: 1.5 }}
+      >
+        <ToggleButton value="simple">Simple</ToggleButton>
+        <ToggleButton value="advanced">Advanced</ToggleButton>
+      </ToggleButtonGroup>
+
+      {effectiveView === 'simple' ? (
+        simple.ok ? (
+          <DecisionTableEditor
+            value={simple.table}
+            onChange={onTableChange}
+            disabled={!editable}
+          />
+        ) : (
+          <Alert severity="info">
+            {simple.reason === 'none'
+              ? 'This rule has no decision table — add a decision table node in Advanced mode.'
+              : 'This rule contains multiple decision tables — use Advanced mode to edit them.'}
+          </Alert>
+        )
+      ) : (
+        <DecisionEditor
+          value={graph}
+          onChange={(v) => {
+            if (!editable || !v) return;
+            setEdited(canonicalJson(v) === canonicalJson(jdm) ? null : v);
+          }}
+          disabled={!editable}
+        />
+      )}
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <DialogTitle>Delete draft {ruleKey}?</DialogTitle>

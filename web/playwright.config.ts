@@ -18,7 +18,7 @@ export default defineConfig({
     {
       name: 'engineer',
       dependencies: ['setup'],
-      testMatch: /promote\.spec\.ts/,
+      testMatch: /(promote|simple-rules)\.spec\.ts/,
       use: { storageState: 'e2e/.auth/engineer.json' },
     },
     {

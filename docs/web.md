@@ -50,13 +50,24 @@ friendlier.
 
 `/{env}/rules/{key}` embeds the GoRules `@gorules/jdm-editor`
 (`src/components/DecisionEditor*.tsx` — `next/dynamic`, `ssr: false`;
-the editor internals are browser-only). The working-copy model is
-mgmt's: drafts are mutable DEV working copies, published rows are
-immutable revisions, and detail lookup prefers the draft when both
+the editor internals are browser-only). A **Simple | Advanced** toggle
+selects the authoring surface: Advanced is the full node graph, Simple
+is a standalone business-mode `DecisionTable`
+(`src/components/DecisionTableEditor*.tsx`) bound to the graph's single
+`decisionTableNode` — guided cell inputs plus schema pickers fed from
+the scenario/fee-output catalogs (`src/lib/scenario-fields.ts`). Table
+edits patch the node's `content` back into the working graph — ids,
+positions, and edges preserved — so every seeded single-table fee rule
+is editable end-to-end without touching nodes and wires. Graphs with
+zero or multiple table nodes fall back to Advanced with an explanatory
+notice; the toggle never blocks the graph editor. The working-copy
+model is mgmt's: drafts are mutable DEV working copies, published rows
+are immutable revisions, and detail lookup prefers the draft when both
 exist. `RuleEditor.tsx` offers Save draft / Publish / Delete draft /
 New draft from published — DEV + write-role only; published and
-non-DEV views are read-only. Publish surfaces the returned full
-sha256; mgmt errors (PII paths, duplicate-key 409) render verbatim.
+non-DEV views are read-only in both modes. Publish surfaces the
+returned full sha256; mgmt errors (PII paths, duplicate-key 409)
+render verbatim.
 
 ## Promotion UI
 

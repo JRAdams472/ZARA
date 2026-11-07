@@ -35,6 +35,32 @@ vi.mock('@gorules/jdm-editor', () => ({
       </button>
     </div>
   ),
+  DecisionTable: ({
+    value,
+    onChange,
+    disabled,
+  }: {
+    value: { rules: Record<string, string>[] };
+    onChange?: (v: unknown) => void;
+    disabled?: boolean;
+  }) => (
+    <div data-testid="grl-dt" data-disabled={String(!!disabled)}>
+      <button
+        data-testid="grl-dt-edit"
+        onClick={() =>
+          onChange?.({ ...value, rules: [...value.rules, { _id: 'rNew', o1: 'true' }] })
+        }
+      >
+        grl-dt-edit
+      </button>
+      <button
+        data-testid="grl-dt-mount-emit"
+        onClick={() => onChange?.(JSON.parse(JSON.stringify(value)))}
+      >
+        grl-dt-mount-emit
+      </button>
+    </div>
+  ),
 }));
 
 import DecisionEditor from '@/components/DecisionEditor';
@@ -43,19 +69,25 @@ import NewRuleButton from '@/components/NewRuleButton';
 import { canEditRule, canWriteEnv } from '@/lib/gate';
 import type { RuleDetail, Whoami } from '@/lib/types';
 
-const draftRule = (over: Partial<RuleDetail> = {}): RuleDetail => ({
-  key: 'origination.base',
-  kind: 'base_fee',
-  status: 'draft',
-  sha256: null,
-  createdBy: 'eng',
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-  publishedAt: null,
-  spec: { nodes: [{ id: 'in' }], edges: [] },
-  jdm: {},
-  ...over,
-});
+const draftRule = (over: Partial<RuleDetail> = {}): RuleDetail => {
+  // Real detail rows: API-written drafts carry the JDM doc in both
+  // columns (spec raw, jdm canonical); seeded rows keep a fee descriptor
+  // in spec — jdm is always the graph.
+  const spec = over.spec ?? { nodes: [{ id: 'in' }], edges: [] };
+  return {
+    key: 'origination.base',
+    kind: 'base_fee',
+    status: 'draft',
+    sha256: null,
+    createdBy: 'eng',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    publishedAt: null,
+    ...over,
+    spec,
+    jdm: over.jdm ?? spec,
+  };
+};
 
 const who = (envAccess: Whoami['envAccess']): Whoami => ({
   sub: 's',
@@ -139,6 +171,143 @@ describe('role + env gating', () => {
     );
     expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull();
     expect((await screen.findByTestId('grl')).dataset.disabled).toBe('true');
+  });
+});
+
+describe('simple (business) table mode', () => {
+  const TABLE_CONTENT = {
+    hitPolicy: 'first',
+    inputs: [{ id: 'i1', name: 'Loan purpose', field: 'loan.purpose' }],
+    outputs: [{ id: 'o1', name: 'charged', field: 'charged' }],
+    rules: [{ _id: 'r1', i1: "'purchase'", o1: 'true' }],
+  };
+  const node = (id: string, type: string, content?: unknown) => ({
+    id,
+    type,
+    name: id,
+    position: { x: 0, y: 0 },
+    ...(content ? { content } : {}),
+  });
+  const singleTableSpec = {
+    nodes: [
+      node('in', 'inputNode'),
+      node('tbl', 'decisionTableNode', TABLE_CONTENT),
+      node('out', 'outputNode'),
+    ],
+    edges: [
+      { id: 'e1', sourceId: 'in', targetId: 'tbl' },
+      { id: 'e2', sourceId: 'tbl', targetId: 'out' },
+    ],
+  };
+
+  it('single-table draft defaults to Simple; Advanced still mounts the graph', async () => {
+    renderClient(
+      <RuleEditor
+        env="dev"
+        ruleKey="origination.base"
+        initialRule={draftRule({ spec: singleTableSpec, jdm: singleTableSpec })}
+        canWrite
+      />,
+    );
+    const dt = await screen.findByTestId('grl-dt');
+    expect(dt.dataset.disabled).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+    expect(await screen.findByTestId('grl')).toBeTruthy();
+  });
+
+  it('published + non-DEV propagate read-only into Simple too', async () => {
+    renderClient(
+      <RuleEditor
+        env="dev"
+        ruleKey="origination.base"
+        initialRule={draftRule({
+          status: 'published',
+          sha256: 'a'.repeat(64),
+          spec: { feeCode: 'origination', amount: 900 },
+          jdm: singleTableSpec,
+        })}
+        canWrite
+      />,
+    );
+    expect((await screen.findByTestId('grl-dt')).dataset.disabled).toBe('true');
+
+    cleanup();
+    renderClient(
+      <RuleEditor
+        env="qa"
+        ruleKey="origination.base"
+        initialRule={draftRule({ spec: singleTableSpec, jdm: singleTableSpec })}
+        canWrite
+      />,
+    );
+    expect((await screen.findByTestId('grl-dt')).dataset.disabled).toBe('true');
+  });
+
+  it('mount-time onChange does not dirty; a real edit patches only the table', async () => {
+    const spy = stubFetch(() => json(200, { key: 'origination.base' }));
+    renderClient(
+      <RuleEditor
+        env="dev"
+        ruleKey="origination.base"
+        initialRule={draftRule({ spec: singleTableSpec, jdm: singleTableSpec })}
+        canWrite
+      />,
+    );
+    await screen.findByTestId('grl-dt');
+    // Deep-equal emit — the editor's mount normalization must not count.
+    fireEvent.click(screen.getByTestId('grl-dt-mount-emit'));
+    expect(screen.queryByText('unsaved changes')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('grl-dt-edit'));
+    expect(screen.getByText('unsaved changes')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    const [, init] = spy.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as {
+      spec: {
+        nodes: { id: string; content?: unknown }[];
+        edges: unknown[];
+      };
+    };
+    const tbl = body.spec.nodes.find((n) => n.id === 'tbl')?.content as
+      | typeof TABLE_CONTENT
+      | undefined;
+    expect(tbl?.rules).toHaveLength(2);
+    expect(body.spec.nodes.map((n) => n.id)).toEqual(['in', 'tbl', 'out']);
+    expect(body.spec.edges).toEqual(singleTableSpec.edges);
+  });
+
+  it('zero or multiple table nodes show the notice; Advanced still editable', async () => {
+    const multiSpec = {
+      nodes: [
+        node('in', 'inputNode'),
+        node('tbl0', 'decisionTableNode', TABLE_CONTENT),
+        node('tbl1', 'decisionTableNode', TABLE_CONTENT),
+        node('out', 'outputNode'),
+      ],
+      edges: [],
+    };
+    renderClient(
+      <RuleEditor
+        env="dev"
+        ruleKey="origination.base"
+        initialRule={draftRule({ spec: multiSpec, jdm: multiSpec })}
+        canWrite
+      />,
+    );
+    // Multiple tables → defaults to Advanced; switching to Simple shows the notice.
+    expect(await screen.findByTestId('grl')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Simple' }));
+    expect(await screen.findByText(/multiple decision tables/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+    expect(await screen.findByTestId('grl')).toBeTruthy();
+
+    cleanup();
+    renderClient(
+      <RuleEditor env="dev" ruleKey="origination.base" initialRule={draftRule()} canWrite />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Simple' }));
+    expect(await screen.findByText(/no decision table/)).toBeTruthy();
   });
 });
 
