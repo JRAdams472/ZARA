@@ -7,7 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=../../proto/zara/engine/v1/engine.proto");
     std::fs::create_dir_all("src/grpc/gen")?;
     std::env::set_var("PROTOC", protoc_bin_vendored::protoc_bin_path()?);
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(true)
         .build_client(true)
         .out_dir("src/grpc/gen")

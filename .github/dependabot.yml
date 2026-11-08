@@ -1,7 +1,6 @@
 version: 2
 updates:
-  # Rust — Cargo.toml + Cargo.lock at the repo root (engine lands in Z2;
-  # dependabot is a no-op until then).
+  # Rust — Cargo.toml + Cargo.lock at the repo root.
   - package-ecosystem: cargo
     directory: /
     schedule:
@@ -10,6 +9,11 @@ updates:
     groups:
       rust-minor-patch:
         update-types: [minor, patch]
+      # The gRPC stack only moves in lockstep — prost codegen, the tonic
+      # runtime, and tonic-prost(-build) must share a version or the
+      # generated types stop satisfying Message/codec traits (MPE-199).
+      grpc-family:
+        patterns: ["tonic*", "prost*"]
 
   # Workflow actions (actions/*, gitleaks-action, audit-check, ...).
   - package-ecosystem: github-actions
