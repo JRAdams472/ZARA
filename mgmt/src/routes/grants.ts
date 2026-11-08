@@ -5,6 +5,7 @@
 import type { FastifyInstance } from 'fastify';
 import type postgres from 'postgres';
 import { isRole, ROLES } from '../auth/roles.js';
+import { clearRoleCache } from '../auth/principal.js';
 import { listGrants, revokeGrantTx, upsertGrantTx } from '../db/grants.js';
 import { record, AUDIT_ACTIONS } from '../db/audit.js';
 import { withTenantTx } from '../db/pool.js';
@@ -52,6 +53,10 @@ export function registerGrants(app: FastifyInstance, sql: postgres.Sql): void {
       });
       return g;
     });
+    // Grants mutated — cached role unions are stale until re-resolved.
+    // Mutations are rare admin ops; a full clear is cheaper than mapping
+    // one grant back to every principal key-set that contains it.
+    clearRoleCache();
     return reply.code(200).send({ grant });
   });
 
@@ -73,6 +78,7 @@ export function registerGrants(app: FastifyInstance, sql: postgres.Sql): void {
       if (result.reason === 'not_found') throw notFound('grant not found');
       throw forbidden("refusing to revoke the tenant's last release manager");
     }
+    clearRoleCache();
     return { revoked: result.row };
   });
 }
