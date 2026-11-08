@@ -79,7 +79,10 @@ fn main() -> Result<()> {
             )
         }
         None => {
-            let mut rng = rand::rngs::OsRng;
+            // rsa's keygen bounds on its own rand_core (0.6-era traits);
+            // use the re-export so the RNG version always matches the
+            // bound — no separate rand dep to keep in sync.
+            let mut rng = rsa::rand_core::OsRng;
             let key = rsa::RsaPrivateKey::new(&mut rng, 2048).context("generating RSA key")?;
             let pubk = key.to_public_key();
             let pem = key
