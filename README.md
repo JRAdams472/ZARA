@@ -7,12 +7,21 @@ Node.js/TypeScript management plane (JDM rule editor, RBAC gatekeeper,
 payloads in under 15 ms — over a shared PostgreSQL cluster with
 schema-per-environment isolation and row-level tenant security.
 
-**Status:** Z5 management console shipped — Next.js `:3400` hosts the
-GoRules JDM editor on a working-copy model (mutable DEV drafts,
-immutable published revisions), role-gated `DEV→QA→UAT→PROD` promotion
-with PROD sign-off reserved for release managers, RM-only tenant admin
-(grants + hash-chained audit trail), and a Playwright e2e suite that
-runs the seeded stack in CI. Dex PKCE → sealed httpOnly session →
+**Status:** MVP complete (Z6 closed) — the full pipeline is validated
+end-to-end: two tenants proven isolated (RLS + FORCE RLS + UI
+personas), a JDM graph promoted DEV→QA→UAT→PROD with SHA-256
+continuity, and a live TRID eval returning the seeded 13-artifact fee
+matrix in <1 ms against the 15 ms budget (gate report on MPE-146;
+posture doc: [docs/security.md](docs/security.md)). Z5 management
+console — Next.js `:3400` hosts the GoRules JDM editor with a
+**Simple | Advanced** toggle (business-mode `DecisionTable` for
+single-table rules, full node graph otherwise) on a working-copy model
+(mutable DEV drafts, immutable published revisions), role-gated
+`DEV→QA→UAT→PROD` promotion with PROD sign-off reserved for release
+managers, RM-only tenant admin (grants + hash-chained audit trail),
+and a Playwright e2e suite — isolation, promotion lifecycle, simple
+mode, and a global teardown sweep — that runs the seeded stack in CI.
+Dex PKCE → sealed httpOnly session →
 `/bff` keeps bearer tokens out of the browser
 ([docs/web.md](docs/web.md)). Z4 rule lifecycle + promotion — dev JDM
 CRUD/publish and unskippable `DEV→QA→UAT→PROD` promotion on
@@ -39,7 +48,10 @@ demo seeds) provisions via `docker compose --profile setup up -d`
 | [docs/engine.md](docs/engine.md) | Z2 service guide — endpoints, claims, dev tokens, bench |
 | [docs/mgmt.md](docs/mgmt.md) | Z3 service guide — RBAC, grants admin, audit chain, secrets/KMS, masking |
 | [docs/web.md](docs/web.md) | Z5 console guide — PKCE session, dev token exchange, BFF, env gating |
-| [docs/fee-model.md](docs/fee-model.md) | Fee rule model — base_fee + adjustment_set |
+| [docs/fee-model.md](docs/fee-model.md) | Fee rule model — base_fee + adjustment_set + seeded TRID demo matrix |
+| [docs/security.md](docs/security.md) | Security posture — per-hop TLS, OIDC flows, secrets, KMS rotation, audit verify, dev carve-outs |
+| [docs/openbao-prod-runbook.md](docs/openbao-prod-runbook.md) | OpenBao prod runbook — Shamir sealing, TLS, raft HA, token lifecycle |
+| [docs/wiki-screenshots.md](docs/wiki-screenshots.md) | zarashots — isolated screenshot stack + capture tooling |
 | [AGENTS.md](AGENTS.md) | Workflow, invariants, verification rules |
 
 ## Stack (locked)

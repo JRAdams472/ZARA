@@ -87,6 +87,7 @@ audit writes for unauthenticated traffic.
 | `GET /api/admin/secrets` | RM/Eng | metadata list — RM sees `keyVersion`+`updatedBy`; Engineer minus `updatedBy`; Auditor **403** |
 | `PUT /api/admin/secrets/:name` | RM | encrypt → upsert ciphertext — audited `secret.put` |
 | `POST /api/admin/secrets/:name/rewrap` | RM | transit rewrap under latest key version — audited `secret.rewrap` |
+| `POST /api/admin/secrets/rewrap-all` | RM | per-row tx sweep: fresh ciphertext read → transit `rewrap`; returns `rewrapped`/`failed` per name — audited |
 | `GET /api/envs/{env}/rules` | env-scoped | artifact list in that env (drafts live in dev) |
 | `GET /api/envs/{env}/rules/:key` | env-scoped | one artifact incl. `spec`/`jdm` |
 | `POST /api/envs/dev/rules` | dev write | create draft — spec = JDM doc, PII-guarded, sha256 over `jdm::text` |

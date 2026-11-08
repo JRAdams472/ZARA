@@ -94,7 +94,11 @@ mgmt's RM middleware 403s regardless.
 `web/e2e/` runs Playwright (MPEx convention) against the seeded
 stack: per-persona dex logins saved as storage states, then
 engineer promote flow, auditor read-only assertions, RM PROD
-sign-off + admin screens.
+sign-off + admin screens, the two-tenant isolation suite
+(`ns-engineer` drives Northstar while an Acme context checks the
+reverse), the UI-driven `DEV→PROD` lifecycle spec with SHA-256
+continuity assertions, and Simple-mode editing. A global teardown
+sweeps `e2e.*` draft rows for both tenants after the run.
 
 ```bash
 npm run test:e2e    # expects the stack up (webServer starts `next start` if free)
@@ -116,5 +120,7 @@ SESSION_SECRET=… API_URL=http://localhost:8401 \
 
 Dev logins (dex): `admin@zara.dev`/`admin123`,
 `engineer@zara.dev`/`engineer123`, `releasemgr@zara.dev`/`releasemgr123`,
-`auditor@zara.dev`/`auditor123`. Grants for these emails are seeded by
-`seed/003_demo_grants.sql` (ACME; auditor also on Northstar).
+`auditor@zara.dev`/`auditor123`, `ns-engineer@zara.dev`/`ns-engineer123`
+(Northstar). Grants for these emails are seeded by
+`seed/003_demo_grants.sql` (ACME; auditor also on Northstar) and
+`seed/004_northstar_grants.sql` (Northstar personas).

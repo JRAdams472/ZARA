@@ -27,9 +27,12 @@ const USER = flag('user', 'admin@zara.dev');
 const PASS = flag('pass', 'admin123');
 
 // Page → the rendered text that proves it settled (never networkidle).
+// waitSelector (optional) waits on a DOM element for widgets whose text
+// isn't reliable — e.g. the client-only GoRules editor renders the
+// .grl-dt table only after hydration, while 'SHA-256' matches instantly.
 const SHOTS = [
   { name: 'rules-dev', path: '/dev/rules', waitFor: 'published' },
-  { name: 'rules-dev-detail', path: '/dev/rules/origination', waitFor: 'SHA-256' },
+  { name: 'rules-dev-detail', path: '/dev/rules/origination', waitFor: 'SHA-256', waitSelector: '.grl-dt' },
   { name: 'rules-qa', path: '/qa/rules', waitFor: 'published' },
   { name: 'promotions-prod', path: '/prod/promotions', waitFor: 'Graph SHA-256' },
   { name: 'admin-grants', path: '/admin/grants', waitFor: 'Role grants' },
@@ -96,6 +99,9 @@ async function main() {
     try {
       await page.goto(`${BASE}${s.path}`);
       await page.getByText(s.waitFor).first().waitFor({ timeout: 20_000 });
+      if (s.waitSelector) {
+        await page.waitForSelector(s.waitSelector, { timeout: 20_000 });
+      }
       // No loading-state residue may be present when we shoot.
       const spinner = page.getByText(SPINNER_RE);
       if ((await spinner.count()) > 0) {
