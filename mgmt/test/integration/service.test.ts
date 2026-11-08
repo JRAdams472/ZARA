@@ -167,6 +167,48 @@ describe('grants admin', () => {
     const at = await kit.mint({ sub: 'aud-1', envs: ['dev', 'qa'] });
     expect((await get('/api/admin/grants', at)).statusCode).toBe(403);
   });
+
+  it('revoke takes effect on the subject\'s very next request (no 30s window)', async () => {
+    if (!kit) return;
+    const rm = await rmToken();
+    const up = await put('/api/admin/grants', {
+      subjectType: 'sub', subject: 'revoke-me', role: 'tenant_rule_engineer',
+    }, rm);
+    expect(up.statusCode).toBe(200);
+
+    // Populate the subject's cached roles, then revoke — the next request
+    // must re-resolve to zero roles, not ride the 30s cache window.
+    const t1 = await kit.mint({ sub: 'revoke-me', envs: ['dev'] });
+    expect((await get('/api/envs/dev/context', t1)).statusCode).toBe(200);
+
+    const d = await del(`/api/admin/grants/${up.json().grant.id}`, rm);
+    expect(d.statusCode).toBe(200);
+
+    const t2 = await kit.mint({ sub: 'revoke-me', envs: ['dev'] });
+    expect((await get('/api/envs/dev/context', t2)).statusCode).toBe(403);
+  });
+
+  it('a new grant takes effect immediately (upsert invalidates too)', async () => {
+    if (!kit) return;
+    const rm = await rmToken();
+    // Unique subject per run — grant rows persist, so a fixed name would
+    // already hold engineer on reruns and break the auditor-first step.
+    const sub = `grant-me-${crypto.randomUUID().slice(0, 8)}`;
+    // Seed auditor-only scope and populate the subject's cache entry.
+    await put('/api/admin/grants', {
+      subjectType: 'sub', subject: sub, role: 'tenant_auditor',
+    }, rm);
+    const t1 = await kit.mint({ sub, envs: ['dev', 'qa'] });
+    expect((await get('/api/envs/dev/context', t1)).statusCode).toBe(403);
+
+    // Engineer grant lands — the cached [auditor] union must not hide
+    // it for 30s.
+    await put('/api/admin/grants', {
+      subjectType: 'sub', subject: sub, role: 'tenant_rule_engineer',
+    }, rm);
+    const t2 = await kit.mint({ sub, envs: ['dev', 'qa'] });
+    expect((await get('/api/envs/dev/context', t2)).statusCode).toBe(200);
+  });
 });
 
 describe('rls + append-only', () => {
