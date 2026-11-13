@@ -21,4 +21,13 @@ ignore = [
     # no decryption oracle exists anywhere in the tree, and the advisory
     # notes local non-network use is unaffected. No fix released.
     "RUSTSEC-2023-0071",
+    # libsqlite3-sys bundled-SQLite advisory — `sqlx-sqlite`/`libsqlite3-sys`
+    # exist in Cargo.lock as phantom nodes only: `sqlx`'s `sqlite` feature is
+    # never enabled (`postgres` only on both crates; `cargo tree -i
+    # sqlx-sqlite --target all` is empty), so the bundled C code never compiles
+    # into a Zara binary. The vector also requires opening an
+    # attacker-crafted `.db`+`-wal` pair — no sqlite file path exists anywhere
+    # in code or deployment (Postgres-only). `sqlx-sqlite` 0.8.x pins
+    # `libsqlite3-sys ~0.30`; no sqlx release takes 0.39 yet.
+    "RUSTSEC-2026-0459",
 ]
