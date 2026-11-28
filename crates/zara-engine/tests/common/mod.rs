@@ -86,5 +86,10 @@ pub fn mint_hs256() -> String {
     });
     let mut header = Header::new(Algorithm::HS256);
     header.kid = Some(KID.into());
-    encode(&header, &claims, &EncodingKey::from_secret(b"whatever")).expect("hs token mints")
+    encode(
+        &header,
+        &claims,
+        &EncodingKey::from_secret(b"whatever").expect("hs key builds"),
+    )
+    .expect("hs token mints")
 }
